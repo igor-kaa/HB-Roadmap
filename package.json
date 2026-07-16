@@ -1,0 +1,9 @@
+{
+  "name": "hyperborea-roadmap-scheduler",
+  "private": true,
+  "version": "4.1.0",
+  "description": "Local-first Hyperborea roadmap scheduler",
+  "scripts": {
+    "test": "node --test"
+  }
+}

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hyperborea Roadmap Scheduler v4 — Sprints</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="title">
+      <div>
+        <h1>Hyperborea Roadmap Scheduler v4</h1>
+        <div class="subtitle">Двухнедельные спринты · глобальная дата доступности GD · GD → DEV / Animation / TD</div>
+      </div>
+      <div class="legend">
+        <span><i class="dot gd"></i>Game Design</span>
+        <span><i class="dot dev"></i>Development</span>
+        <span><i class="dot anim"></i>Animation</span>
+        <span><i class="dot td"></i>Technical Design</span>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="control"><label>Начало roadmap (понедельник)</label><input id="startDate" type="date" value="2026-07-13"></div>
+      <div class="control"><label>GD доступны с месяца</label><input id="gdStartMonth" type="month" value="2026-07"></div>
+      <div class="control"><label>Design GD+TD / мес.</label><input id="designCap" type="number" value="60" min="1"></div>
+      <div class="control"><label>Development / мес.</label><input id="devCap" type="number" value="100" min="1"></div>
+      <div class="control"><label>Animation / мес.</label><input id="animCap" type="number" value="40" min="1"></div>
+      <div class="control"><label>Макс. этап/фича / мес.</label><input id="featureCap" type="number" value="20" min="1"></div>
+      <div class="control"><label>Поиск</label><input id="search" type="search" placeholder="Название фичи"></div>
+      <div class="control">
+        <label>Приоритет</label>
+        <select id="priority"><option>All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select>
+      </div>
+      <button class="btn" id="recalcButton">Пересчитать</button>
+    </div>
+  </header>
+
+  <section class="summary" id="summary"></section>
+  <section class="section">
+    <div class="section-head">
+      <h2>Диаграмма Ганта по спринтам</h2>
+      <div class="hint">Спринт = 14 календарных / 10 рабочих дней · красная граница — доступность GD</div>
+    </div>
+    <div class="gantt-shell"><div class="gantt-content" id="gantt"></div></div>
+  </section>
+  <section class="section">
+    <div class="section-head">
+      <h2>Capacity по двухнедельным спринтам</h2>
+      <div class="hint">Design 30 · Development 50 · Animation 20 · максимум 10 mdays на этап одной фичи</div>
+    </div>
+    <div class="capacity-grid" id="capacity"></div>
+  </section>
+  <details>
+    <summary>Правила scheduling engine</summary>
+    <div class="algo">
+      1. Roadmap начинается в понедельник; спринты идут непрерывными блоками по 14 календарных дней.<br>
+      2. Месячные capacity делятся пополам для спринта: Design 30, Development 50, Animation 20 mdays.<br>
+      3. Один этап одной фичи получает не больше 10 mdays за спринт — один full-time специалист.<br>
+      4. Все GD-задачи заблокированы до первого рабочего дня выбранного месяца. Фичи с GD=0 не блокируются.<br>
+      5. DEV, Animation и TD стартуют только после завершения GD своей фичи.<br>
+      6. TD заканчивается одновременно с позднейшим из DEV/Animation или позже.<br>
+      7. Приоритет: Critical → High → Medium → Low; затем порядок строк CSV.
+    </div>
+  </details>
+  <div class="bottom">
+    <label class="file-label">Загрузить новый CSV<input id="csvFile" type="file" accept=".csv,text/csv"></label>
+    <button class="btn2" id="exportButton">Экспорт расписания CSV</button>
+  </div>
+  <aside class="drawer" id="drawer"><button class="close" id="closeDrawerButton">×</button><div id="drawerBody"></div></aside>
+
+  <script src="csv.js"></script>
+  <script src="scheduler.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
