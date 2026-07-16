@@ -3,8 +3,10 @@
 
   const S = HyperboreaScheduler;
   const Csv = HyperboreaCsv;
-  const DAY_WIDTH = 3.65;
+  const MIN_DAY_WIDTH = 3.65;
   const LEFT = 410;
+  const TIMELINE_GUTTER = 18;
+  const SPRINT_DISPLAY_START = 18;
   let rawFeatures = Csv.parseCsv(Csv.DEFAULT_CSV);
   let state = null;
   let selected = null;
@@ -62,7 +64,7 @@
       output.push({
         index,
         key: `S${index + 1}`,
-        label: `Sprint ${index + 1}`,
+        label: `Sprint ${index + SPRINT_DISPLAY_START}`,
         start,
         end: end > state.endDate ? state.endDate : end,
         left: index * 14,
@@ -115,11 +117,14 @@
       (priority === 'All' || feature.priority === priority)
     );
     const totalDays = S.daysBetween(state.startDate, S.addDays(state.endDate, 1));
-    const timelineWidth = Math.ceil(totalDays * DAY_WIDTH);
+    const ganttShell = document.getElementById('ganttShell');
+    const availableTimelineWidth = ganttShell ? ganttShell.clientWidth - LEFT - TIMELINE_GUTTER : 0;
+    const dayWidth = Math.max(MIN_DAY_WIDTH, availableTimelineWidth / totalDays);
+    const timelineWidth = Math.ceil(totalDays * dayWidth);
     const fullWidth = LEFT + timelineWidth;
-    const gdGateLeft = Math.max(0, S.daysBetween(state.startDate, state.gdAvailableDate)) * DAY_WIDTH;
+    const gdGateLeft = Math.max(0, S.daysBetween(state.startDate, state.gdAvailableDate)) * dayWidth;
     let html = `<div style="width:${fullWidth}px"><div class="sprint-header"><div class="sprint-left">ID · Feature · priority · estimates</div><div class="sprint-track" style="width:${timelineWidth}px">${blocks.map(block =>
-      `<div class="sprint-cell" style="left:${block.left * DAY_WIDTH}px;width:${block.width * DAY_WIDTH}px"><b>${block.label}</b><small>${fmtShort(block.start)}–${fmtShort(block.end)}</small></div>`
+      `<div class="sprint-cell" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px"><b>${block.label}</b><small>${fmtShort(block.start)}–${fmtShort(block.end)}</small></div>`
     ).join('')}</div></div>`;
 
     if (!visible.length) {
@@ -129,7 +134,7 @@
 
     for (const feature of visible) {
       const grid = blocks.map(block =>
-        `<div class="grid-sprint" style="left:${block.left * DAY_WIDTH}px;width:${block.width * DAY_WIDTH}px"></div>`
+        `<div class="grid-sprint" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px"></div>`
       ).join('');
       let bars = '';
       for (const stage of [
@@ -142,8 +147,8 @@
         for (const segment of segments(feature[stage.key])) {
           const start = state.days[segment.start].date;
           const end = S.addDays(state.days[segment.end].date, 1);
-          const left = S.daysBetween(state.startDate, start) * DAY_WIDTH;
-          const width = Math.max(3, S.daysBetween(start, end) * DAY_WIDTH);
+          const left = S.daysBetween(state.startDate, start) * dayWidth;
+          const width = Math.max(3, S.daysBetween(start, end) * dayWidth);
           bars += `<div class="bar ${stage.css}" style="left:${left}px;width:${width}px" title="${stage.name}: ${stage.estimate} mdays · ${fmt(stageRange.start)} — ${fmt(stageRange.end)}"></div>`;
         }
       }
@@ -186,7 +191,7 @@
         usage.dev / state.sprintCapacities.dev,
         usage.anim / state.sprintCapacities.anim
       );
-      html += `<div class="cap-card"><div class="cap-title"><strong>Sprint ${usage.block.index + 1}</strong><span>${maximum > .995 ? 'полная загрузка' : 'есть резерв'}</span></div><div class="cap-dates">${fmt(usage.block.start)} — ${fmt(usage.block.end)}</div>${capacityRow('Design', `GD ${usage.gd.toFixed(1)} + TD ${usage.td.toFixed(1)}`, design, state.sprintCapacities.design, [['fill-gd', usage.gd], ['fill-td', usage.td]])}${capacityRow('Development', '', usage.dev, state.sprintCapacities.dev, [['fill-dev', usage.dev]])}${capacityRow('Animation', '', usage.anim, state.sprintCapacities.anim, [['fill-anim', usage.anim]])}</div>`;
+      html += `<div class="cap-card"><div class="cap-title"><strong>${usage.block.label}</strong><span>${maximum > .995 ? 'полная загрузка' : 'есть резерв'}</span></div><div class="cap-dates">${fmt(usage.block.start)} — ${fmt(usage.block.end)}</div>${capacityRow('Design', `GD ${usage.gd.toFixed(1)} + TD ${usage.td.toFixed(1)}`, design, state.sprintCapacities.design, [['fill-gd', usage.gd], ['fill-td', usage.td]])}${capacityRow('Development', '', usage.dev, state.sprintCapacities.dev, [['fill-dev', usage.dev]])}${capacityRow('Animation', '', usage.anim, state.sprintCapacities.anim, [['fill-anim', usage.anim]])}</div>`;
     }
     document.getElementById('capacity').innerHTML = html;
   }
@@ -292,6 +297,9 @@
     renderGantt();
   });
   document.getElementById('exportButton').addEventListener('click', exportCsv);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('resize', renderGantt);
+  }
   document.getElementById('csvFile').addEventListener('change', async event => {
     try {
       const file = event.target.files && event.target.files[0];

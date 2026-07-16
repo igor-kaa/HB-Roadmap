@@ -14,6 +14,8 @@ test('index is file:// compatible and the browser app boots without a backend', 
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(match => match[1]);
   assert.deepEqual(scripts, ['csv.js', 'scheduler.js', 'app.js']);
   assert.doesNotMatch(html, /type=["']module["']/i);
+  assert.ok(html.indexOf('id="csvFile"') < html.indexOf('id="recalcButton"'));
+  assert.match(html, /file-label-primary/);
 
   const elements = new Map();
   const values = {
@@ -31,6 +33,7 @@ test('index is file:// compatible and the browser app boots without a backend', 
     if (!elements.has(id)) {
       elements.set(id, {
         value: values[id] || '',
+        clientWidth: id === 'ganttShell' ? 1440 : 0,
         innerHTML: '',
         files: [],
         addEventListener() {},
@@ -63,5 +66,7 @@ test('index is file:// compatible and the browser app boots without a backend', 
 
   assert.match(element('summary').innerHTML, />43</);
   assert.match(element('summary').innerHTML, /09 дек\. 2026 г\./);
-  assert.match(element('gantt').innerHTML, /Sprint 11/);
+  assert.match(element('gantt').innerHTML, /Sprint 18/);
+  assert.match(element('gantt').innerHTML, /Sprint 28/);
+  assert.match(element('gantt').innerHTML, /<div style="width:1422px">/);
 });

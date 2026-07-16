@@ -32,7 +32,10 @@
         <label>Приоритет</label>
         <select id="priority"><option>All</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select>
       </div>
-      <button class="btn" id="recalcButton">Пересчитать</button>
+      <div class="actions">
+        <label class="file-label file-label-primary">Добавить новый CSV<input id="csvFile" type="file" accept=".csv,text/csv"></label>
+        <button class="btn" id="recalcButton">Пересчитать</button>
+      </div>
     </div>
   </header>
 
@@ -42,7 +45,7 @@
       <h2>Диаграмма Ганта по спринтам</h2>
       <div class="hint">Спринт = 14 календарных / 10 рабочих дней · красная граница — доступность GD</div>
     </div>
-    <div class="gantt-shell"><div class="gantt-content" id="gantt"></div></div>
+    <div class="gantt-shell" id="ganttShell"><div class="gantt-content" id="gantt"></div></div>
   </section>
   <section class="section">
     <div class="section-head">
@@ -63,10 +66,7 @@
       7. Приоритет: Critical → High → Medium → Low; затем порядок строк CSV.
     </div>
   </details>
-  <div class="bottom">
-    <label class="file-label">Загрузить новый CSV<input id="csvFile" type="file" accept=".csv,text/csv"></label>
-    <button class="btn2" id="exportButton">Экспорт расписания CSV</button>
-  </div>
+  <div class="bottom"><button class="btn2" id="exportButton">Экспорт расписания CSV</button></div>
   <aside class="drawer" id="drawer"><button class="close" id="closeDrawerButton">×</button><div id="drawerBody"></div></aside>
 
   <script src="csv.js"></script>

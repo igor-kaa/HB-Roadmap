@@ -11,6 +11,7 @@ h1{font-size:23px;margin:0 0 4px}
 .dot{width:10px;height:10px;border-radius:3px}
 .gd{background:var(--gd)}.dev{background:var(--dev)}.anim{background:var(--anim)}.td{background:var(--td)}
 .controls{display:grid;grid-template-columns:145px 150px 120px 120px 120px 140px minmax(190px,1fr) 135px auto;gap:9px;margin-top:13px}
+.actions{display:flex;flex-direction:column;gap:6px;align-self:end}
 .control{display:flex;flex-direction:column;gap:4px}
 .control label{font-size:10px;color:var(--muted)}
 .control input,.control select{height:35px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);padding:0 9px;outline:0}
@@ -45,6 +46,8 @@ h1{font-size:23px;margin:0 0 4px}
 .drawer h3{font-size:16px;margin:0 38px 4px 0}.dp{font-size:11px;color:var(--muted);margin-bottom:12px}.stage{display:grid;grid-template-columns:10px 52px 1fr;gap:8px;border-top:1px solid var(--line);padding:10px 0;font-size:10px}
 .sc{width:10px;height:10px;border-radius:3px;margin-top:2px}.sn{font-weight:750}.st{color:#c6cfda;line-height:1.5}.rule{margin-top:9px;padding:9px;background:var(--panel2);border-radius:8px;font-size:10px;color:var(--muted);line-height:1.55}
 .bottom{display:flex;gap:8px;justify-content:flex-end;padding:0 22px 22px}
+.file-label-primary{height:35px;background:#0f766e;border-color:#14b8a6;color:#fff;font-weight:700;text-align:center;box-shadow:0 4px 12px rgba(20,184,166,.18)}
+.file-label-primary:hover{background:#0d9488;border-color:#2dd4bf}
 details{margin:0 22px 14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 11px}summary{font-size:11px;font-weight:700;cursor:pointer}.algo{font-size:10px;color:var(--muted);line-height:1.65;padding-top:7px}
 .empty{text-align:center;color:var(--muted);padding:22px}.file-label{height:34px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);padding:8px 11px;cursor:pointer;font-size:11px}.file-label input{display:none}.error-card{border-color:#7f1d1d}.blocked-note{color:#fca5a5}
 @media(max-width:1250px){:root{--left:330px}.controls{grid-template-columns:repeat(3,minmax(120px,1fr))}.summary{grid-template-columns:repeat(3,minmax(125px,1fr))}}
