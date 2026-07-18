@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Hyperborea Level Production Roadmap</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="locations-page">
+  <header class="top">
+    <nav class="roadmap-nav" aria-label="Roadmap tracks">
+      <a href="index.html">Gameplay Features</a>
+      <a class="active" href="locations.html">Level Production</a>
+    </nav>
+    <div class="title">
+      <div>
+        <h1>Hyperborea Level Production</h1>
+        <div class="subtitle">Локации · производственные зависимости FS / FF · мощности департаментов</div>
+      </div>
+      <div class="legend location-legend" id="legend"></div>
+    </div>
+    <div class="location-controls">
+      <div class="control"><label>Начало roadmap (понедельник)</label><input id="locationStartDate" type="date" value="2026-07-13"></div>
+      <div class="control"><label>Поиск локации</label><input id="locationSearch" type="search" placeholder="Название локации"></div>
+      <div class="capacity-inputs" id="capacityInputs"></div>
+      <div class="actions location-actions">
+        <label class="file-label file-label-primary">CSV с оценками<input id="locationsCsvFile" type="file" accept=".csv,text/csv"></label>
+        <label class="file-label">CSV с dependencies<input id="dependenciesCsvFile" type="file" accept=".csv,text/csv"></label>
+        <button class="btn" id="locationRecalcButton">Пересчитать</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="summary location-summary" id="locationSummary"></section>
+  <section class="section">
+    <div class="section-head">
+      <h2>Диаграмма Ганта по локациям</h2>
+      <div class="hint">Спринт = 14 календарных / 10 рабочих дней · порядок локаций берётся из CSV</div>
+    </div>
+    <div class="gantt-shell location-gantt-shell" id="locationGanttShell"><div class="gantt-content" id="locationGantt"></div></div>
+  </section>
+  <section class="section">
+    <div class="section-head">
+      <h2>Capacity по двухнедельным спринтам</h2>
+      <div class="hint">Месячная мощность пересчитывается из 20 рабочих дней; один этап получает максимум 1 mday в день</div>
+    </div>
+    <div class="capacity-grid" id="locationCapacity"></div>
+  </section>
+  <details>
+    <summary>Правила location scheduling engine</summary>
+    <div class="algo">
+      1. Concept запускает Design Pass и Asset Pass одной локации.<br>
+      2. После LD Greybox параллельно открываются Gameplay Pass, LA Dressing, Visual FX и Sound FX.<br>
+      3. LA Dressing может начаться после LD Greybox, но по FF-правилу не заканчивается раньше Modelling.<br>
+      4. Lighting начинается после LA Dressing. Gameplay Balancing и QA / Playtest пока считаются milestone-работами и не входят в расчёт.<br>
+      5. Approved и Work In Progress отображаются как статусы, но оценки включаются целиком: это полный production plan, а не remaining-work forecast.<br>
+      6. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
+    </div>
+  </details>
+  <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
+  <aside class="drawer" id="locationDrawer"><button class="close" id="locationCloseDrawerButton">×</button><div id="locationDrawerBody"></div></aside>
+
+  <script src="location-csv.js"></script>
+  <script src="location-scheduler.js"></script>
+  <script src="location-app.js"></script>
+</body>
+</html>
