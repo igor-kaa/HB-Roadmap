@@ -10,6 +10,7 @@
   const LANE_HEIGHT = 22;
   let input = Csv.parseCsv(Csv.DEFAULT_CSV);
   let dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
+  let stageCapacities = Csv.parseStageCapacities(Csv.DEFAULT_STAGE_CAPACITY_CSV);
   let state = null;
   let selected = null;
 
@@ -100,7 +101,7 @@
       ['Окончание production', fmt(state.endDate), `${sprints} спринтов`],
       ['Dependencies', state.dependencies.length, `${ffCount} Finish-to-Finish`],
       ['Milestone-работы', input.excluded.length, 'пока исключены из расчёта'],
-      ['Источник оценок', 'Locations CSV', 'Lighting & VFX разделён на 3 этапа']
+      ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', 'people / stage · 0 = unlimited']
     ];
     document.getElementById('locationSummary').innerHTML = cards.map(card =>
       `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`
@@ -136,7 +137,7 @@
         `<div class="location-lane" style="top:${ROW_HEADER + index * LANE_HEIGHT}px"></div>`
       ).join('');
       const labels = location.tasks.map(task =>
-        `<div class="location-stage-label"><i class="sc ${task.departmentCss}"></i><span>${esc(task.stageName)}</span><small>${esc(task.department)} · ${task.estimate} md</small></div>`
+        `<div class="location-stage-label"><i class="sc ${task.departmentCss}"></i><span>${esc(task.stageName)}</span><small>${esc(task.department)} · ${task.estimate} md · ${task.maxParallelPeople === 0 ? 'unlimited' : `×${task.maxParallelPeople}`}</small></div>`
       ).join('');
       let bars = '';
       location.tasks.forEach((task, index) => {
@@ -192,7 +193,7 @@
       const dependenciesText = task.incoming.length
         ? task.incoming.map(item => `${byId.get(item.taskId).stageName} (${item.type}${item.lag ? ` +${item.lag}` : ''})`).join(', ')
         : 'нет';
-      return `<div class="location-drawer-stage"><i class="sc ${task.departmentCss}"></i><div><strong>${esc(task.stageName)}</strong><small>${esc(task.department)} · ${task.estimate} mdays · ${esc(task.status || 'No status')}</small><span>${taskRange ? `${fmt(taskRange.start)} — ${fmt(taskRange.end)}` : 'Оценка отсутствует'}<br>Depends on: ${esc(dependenciesText)}</span></div></div>`;
+      return `<div class="location-drawer-stage"><i class="sc ${task.departmentCss}"></i><div><strong>${esc(task.stageName)}</strong><small>${esc(task.department)} · ${task.estimate} mdays · ${esc(task.status || 'No status')}</small><span>${taskRange ? `${fmt(taskRange.start)} — ${fmt(taskRange.end)}` : 'Оценка отсутствует'}<br>Parallel people: ${task.maxParallelPeople === 0 ? 'unlimited' : task.maxParallelPeople}<br>Depends on: ${esc(dependenciesText)}</span></div></div>`;
     }).join('');
     document.getElementById('locationDrawerBody').innerHTML = `<h3>${esc(location.name)}</h3><div class="dp">${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} mdays total</div>${stages}`;
     document.getElementById('locationDrawer').classList.add('open');
@@ -201,7 +202,7 @@
 
   function recalculate() {
     try {
-      state = Scheduler.schedule(input, dependencies, document.getElementById('locationStartDate').value, readCapacities());
+      state = Scheduler.schedule(input, dependencies, stageCapacities, document.getElementById('locationStartDate').value, readCapacities());
       selected = null;
       document.getElementById('locationDrawer').classList.remove('open');
       renderSummary();
@@ -220,14 +221,14 @@
   }
 
   function exportCsv() {
-    const header = ['Location ID', 'Location', 'Priority', 'Stage ID', 'Stage', 'Department', 'Status', 'Estimate', 'Start', 'Finish'];
+    const header = ['Location ID', 'Location', 'Priority', 'Stage ID', 'Stage', 'Department', 'Max Parallel People', 'Status', 'Estimate', 'Start', 'Finish'];
     const lines = [header.map(csvCell).join(',')];
     for (const location of state.locations) {
       for (const task of location.tasks) {
         const taskRange = range(task);
         lines.push([
           location.id, location.name, location.priorityDisplay, task.stageId, task.stageName,
-          task.department, task.status, task.estimate,
+          task.department, task.maxParallelPeople, task.status, task.estimate,
           taskRange ? Scheduler.dateKey(taskRange.start) : '',
           taskRange ? Scheduler.dateKey(taskRange.end) : ''
         ].map(csvCell).join(','));
@@ -267,6 +268,17 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       dependencies = Csv.parseDependencies(await file.text());
+      recalculate();
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    }
+  });
+  document.getElementById('stageCapacityCsvFile').addEventListener('change', async event => {
+    try {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      stageCapacities = Csv.parseStageCapacities(await file.text());
       recalculate();
     } catch (error) {
       console.error(error);

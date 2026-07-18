@@ -16,6 +16,8 @@ test('locations page is file:// compatible and links back to gameplay roadmap', 
   assert.deepEqual(scripts, ['location-csv.js', 'location-scheduler.js', 'location-app.js']);
   assert.doesNotMatch(html, /type=["']module["']/i);
   assert.match(html, /href="index\.html"/);
+  assert.match(html, /id="stageCapacityCsvFile"/);
+  assert.match(html, /href="location-stage-capacity\.csv"/);
   assert.match(index, /href="locations\.html"/);
 
   const elements = new Map();

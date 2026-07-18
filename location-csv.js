@@ -7,6 +7,7 @@
 
   const REQUIRED_COLUMNS = ['Location & Filler Space', 'Priority', 'Stage', 'Status', 'Est. Days', 'Notes'];
   const DEPENDENCY_COLUMNS = ['From Stage ID', 'To Stage ID', 'Type', 'Lag Days'];
+  const STAGE_CAPACITY_COLUMNS = ['Stage ID', 'Max Parallel People'];
   const DEPARTMENTS = Object.freeze([
     { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
     { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 80 },
@@ -190,6 +191,25 @@
     return dependencies;
   }
 
+  function parseStageCapacities(text) {
+    const rows = parseRows(text);
+    const { index } = columnReader(rows, STAGE_CAPACITY_COLUMNS);
+    const capacities = {};
+    for (const row of rows.filter(row => row.some(value => String(value || '').trim()))) {
+      const stageId = String(row[index('Stage ID')] || '').trim().toUpperCase();
+      const maxParallelPeople = Number(String(row[index('Max Parallel People')] || '').trim());
+      if (!STAGES[stageId]) throw new Error(`Неизвестный Stage ID в stage capacity: ${stageId}`);
+      if (Object.prototype.hasOwnProperty.call(capacities, stageId)) throw new Error(`Повтор Stage ID в stage capacity: ${stageId}`);
+      if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
+        throw new Error(`Max Parallel People должен быть целым числом ≥ 0: ${stageId}`);
+      }
+      capacities[stageId] = maxParallelPeople;
+    }
+    const missing = Object.keys(STAGES).filter(stageId => !Object.prototype.hasOwnProperty.call(capacities, stageId));
+    if (missing.length) throw new Error('Stage capacity CSV не содержит: ' + missing.join(', '));
+    return capacities;
+  }
+
   function csvCell(value) {
     const text = String(value ?? '');
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
@@ -242,15 +262,30 @@ LA_DRESSING,LIGHTING,FS,0
 LD_GREYBOX,VISUAL_FX,FS,0
 LD_GREYBOX,SOUND_FX,FS,0`;
 
+  const DEFAULT_STAGE_CAPACITY_CSV = `Stage ID,Max Parallel People
+CONCEPT,1
+LD_MACRO,1
+LD_GREYBOX,1
+GAMEPLAY_PASS,1
+LA_ASSET_LIST,1
+MODELLING,1
+LA_DRESSING,1
+LIGHTING,1
+VISUAL_FX,1
+SOUND_FX,1`;
+
   return {
     REQUIRED_COLUMNS,
     DEPENDENCY_COLUMNS,
+    STAGE_CAPACITY_COLUMNS,
     DEPARTMENTS,
     STAGES,
     DEFAULT_CSV: buildDefaultCsv(),
     DEFAULT_DEPENDENCIES_CSV,
+    DEFAULT_STAGE_CAPACITY_CSV,
     parseRows,
     parseCsv,
-    parseDependencies
+    parseDependencies,
+    parseStageCapacities
   };
 });

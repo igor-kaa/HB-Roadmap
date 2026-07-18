@@ -99,7 +99,7 @@
       a.locationOrder - b.locationOrder || a.stageOrder - b.stageOrder;
   }
 
-  function schedule(input, dependencies, startDateValue, capacities) {
+  function schedule(input, dependencies, stageCapacities, startDateValue, capacities) {
     const startDate = parseDate(startDateValue);
     if (startDate.getDay() !== 1) throw new Error('Начало roadmap должно приходиться на понедельник');
     if (!input || !Array.isArray(input.locations) || !input.locations.length) throw new Error('Нет локаций для расчёта');
@@ -109,6 +109,12 @@
 
     const stageIds = new Set(input.locations.flatMap(location => location.tasks.map(task => task.stageId)));
     validateDependencies(stageIds, dependencies);
+    for (const stageId of stageIds) {
+      const maxParallelPeople = stageCapacities && stageCapacities[stageId];
+      if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
+        throw new Error(`Некорректный Max Parallel People: ${stageId}`);
+      }
+    }
     const stageOrder = new Map([...stageIds].map((id, index) => [id, index]));
     const locations = input.locations.map(location => ({
       ...location,
@@ -121,6 +127,7 @@
         locationOrder: location.order,
         priority: normalizePriority(location.priority),
         stageOrder: stageOrder.get(task.stageId),
+        maxParallelPeople: stageCapacities[task.stageId],
         remaining: task.estimate,
         allocation: [],
         completeIndex: task.estimate <= EPSILON ? -1 : null,
@@ -160,7 +167,8 @@
 
         for (const task of ready) {
           if (available <= EPSILON) break;
-          let amount = Math.min(1, task.remaining, available);
+          const taskCapacity = task.maxParallelPeople === 0 ? available : task.maxParallelPeople;
+          let amount = Math.min(taskCapacity, task.remaining, available);
           const wouldFinish = amount + EPSILON >= task.remaining;
           if (wouldFinish) {
             const finishAllowed = task.incoming.filter(item => item.type === 'FF').every(item => {
@@ -217,6 +225,7 @@
       locations,
       tasks,
       dependencies,
+      stageCapacities: { ...stageCapacities },
       days: usedDays,
       startDate,
       endDate: usedDays[usedDays.length - 1].date,
