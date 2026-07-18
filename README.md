@@ -35,7 +35,7 @@ Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
 
 Это временное правило совместимости с текущим CSV. Если в будущем исходник будет содержать отдельные строки `Lighting`, `Visual FX` и `Sound FX`, parser также примет их напрямую.
 
-Месячные мощности департаментов задаются на странице. Значения по умолчанию: Design — 20, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц. Одна задача может расходовать не более 1 mday в рабочий день.
+Месячные мощности департаментов задаются на странице. Значения по умолчанию: Design — 20, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц. В отличие от gameplay roadmap, одна location-задача может использовать весь свободный capacity своего департамента. Если она заканчивается до исчерпания дневного capacity, остаток в тот же рабочий день переходит следующей готовой задаче.
 
 ### Dependencies
 
