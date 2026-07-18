@@ -37,7 +37,7 @@ test('locations page is file:// compatible and links back to gameplay roadmap', 
 
   const capacityElements = Csv.DEPARTMENTS.map(department => ({
     dataset: { capacity: department.id },
-    value: '20'
+    value: String(department.defaultCapacity)
   }));
   const context = {
     HyperboreaLocationCsv: Csv,

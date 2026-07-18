@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const Csv = require('../location-csv.js');
 const Scheduler = require('../location-scheduler.js');
 
-const CAPACITIES = Object.fromEntries(Csv.DEPARTMENTS.map(department => [department.id, 20]));
+const CAPACITIES = Object.fromEntries(Csv.DEPARTMENTS.map(department => [department.id, department.defaultCapacity]));
 
 function scheduleDefault() {
   const input = Csv.parseCsv(Csv.DEFAULT_CSV);
@@ -24,12 +24,23 @@ test('Locations Inventory format expands into the level production model', () =>
   );
 });
 
+test('department default capacities match the level production plan', () => {
+  assert.deepEqual(CAPACITIES, {
+    design: 20,
+    levelDesign: 80,
+    levelArt: 40,
+    modeling: 60,
+    technicalArt: 20,
+    sound: 20
+  });
+});
+
 test('default location roadmap allocates every estimate and respects capacities', () => {
   const { state } = scheduleDefault();
   assert.equal(state.locations.length, 10);
   assert.equal(state.tasks.length, 100);
   assert.equal(state.tasks.reduce((sum, task) => sum + task.estimate, 0), 1000);
-  assert.equal(Scheduler.dateKey(state.endDate), '2027-09-20');
+  assert.equal(Scheduler.dateKey(state.endDate), '2027-05-28');
 
   for (const task of state.tasks) {
     const allocated = task.allocation.reduce((sum, item) => sum + item.amount, 0);

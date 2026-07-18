@@ -9,9 +9,9 @@
   const DEPENDENCY_COLUMNS = ['From Stage ID', 'To Stage ID', 'Type', 'Lag Days'];
   const DEPARTMENTS = Object.freeze([
     { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
-    { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 20 },
-    { id: 'levelArt', name: 'Level Art', css: 'loc-la', defaultCapacity: 20 },
-    { id: 'modeling', name: '3D Outsource', css: 'loc-3d', defaultCapacity: 20 },
+    { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 80 },
+    { id: 'levelArt', name: 'Level Art', css: 'loc-la', defaultCapacity: 40 },
+    { id: 'modeling', name: '3D Outsource', css: 'loc-3d', defaultCapacity: 60 },
     { id: 'technicalArt', name: 'Technical Art', css: 'loc-ta', defaultCapacity: 20 },
     { id: 'sound', name: 'Sound', css: 'loc-sound', defaultCapacity: 20 }
   ]);
