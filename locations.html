@@ -42,7 +42,7 @@
   <section class="section">
     <div class="section-head">
       <h2>Capacity по двухнедельным спринтам</h2>
-      <div class="hint">Месячная мощность пересчитывается из 20 рабочих дней и целиком направляется в текущую задачу отдела</div>
+      <div class="hint">Месячная мощность пересчитывается из 20 рабочих дней; один этап получает максимум 1 mday в день</div>
     </div>
     <div class="capacity-grid" id="locationCapacity"></div>
   </section>
@@ -54,8 +54,7 @@
       3. LA Dressing может начаться после LD Greybox, но по FF-правилу не заканчивается раньше Modelling.<br>
       4. Lighting начинается после LA Dressing. Gameplay Balancing и QA / Playtest пока считаются milestone-работами и не входят в расчёт.<br>
       5. Approved и Work In Progress отображаются как статусы, но оценки включаются целиком: это полный production plan, а не remaining-work forecast.<br>
-      6. Один этап может использовать весь свободный capacity своего департамента; остаток дня переходит следующей готовой задаче.<br>
-      7. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
+      6. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
     </div>
   </details>
   <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>

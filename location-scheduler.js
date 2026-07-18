@@ -160,10 +160,7 @@
 
         for (const task of ready) {
           if (available <= EPSILON) break;
-          // Unlike the gameplay roadmap, a location stage can use the whole
-          // department in parallel. Any capacity left after completion flows
-          // to the next ready task on the same workday.
-          let amount = Math.min(task.remaining, available);
+          let amount = Math.min(1, task.remaining, available);
           const wouldFinish = amount + EPSILON >= task.remaining;
           if (wouldFinish) {
             const finishAllowed = task.incoming.filter(item => item.type === 'FF').every(item => {
