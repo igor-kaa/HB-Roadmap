@@ -17,6 +17,8 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
   assert.doesNotMatch(html, /type=["']module["']/i);
   assert.match(html, /href="index\.html"/);
   assert.match(html, /id="stageCapacityCsvFile"/);
+  assert.match(html, /id="stageTeamsCsvFile"/);
+  assert.match(html, /id="stageTeamsExportButton"/);
   assert.match(html, /href="location-stage-capacity\.csv"/);
   assert.match(index, /href="locations\.html"/);
 
@@ -43,6 +45,7 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
     value: String(department.defaultCapacity)
   }));
   const stored = new Map();
+  const alerts = [];
   const context = {
     HyperboreaLocationCsv: Csv,
     HyperboreaLocationScheduler: Scheduler,
@@ -52,7 +55,7 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
       createElement: () => ({ click() {} })
     },
     console,
-    alert() {},
+    alert(message) { alerts.push(message); },
     localStorage: {
       getItem: key => stored.has(key) ? stored.get(key) : null,
       setItem: (key, value) => stored.set(key, value),
@@ -76,6 +79,21 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
   assert.match(stored.get('hyperborea.locations.stage-capacities.v1'), /custom-parallelism\.csv/);
   assert.match(element('locationSummary').innerHTML, /custom-parallelism\.csv/);
   assert.match(element('locationGantt').innerHTML, /unlimited/);
+
+  const unknownStageCsv = Csv.DEFAULT_CSV.replace(',,Total,,10,', ',,New Review Stage,,10,\n,,Total,,10,');
+  await element('locationsCsvFile').listeners.change({
+    target: { files: [{ name: 'unknown-stage.csv', text: async () => unknownStageCsv }] }
+  });
+  assert.match(alerts.at(-1), /Неизвестные этапы: New Review Stage/);
+  assert.match(element('locationSummary').innerHTML, /Unknown/);
+  assert.match(element('locationGantt').innerHTML, /New Review Stage/);
+  assert.match(stored.get('hyperborea.locations.stage-teams.v1'), /New Review Stage,Unknown/);
+
+  const reassignedTeams = Csv.DEFAULT_STAGE_TEAMS_CSV + '\nNew Review Stage,Design';
+  await element('stageTeamsCsvFile').listeners.change({
+    target: { files: [{ name: 'stage-teams.csv', text: async () => reassignedTeams }] }
+  });
+  assert.match(element('locationGantt').innerHTML, /Design · 10 md/);
 
   element('locationSummary').innerHTML = '';
   element('locationGantt').innerHTML = '';

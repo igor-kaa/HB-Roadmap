@@ -107,10 +107,16 @@
       if (!Number.isFinite(capacity) || capacity <= 0) throw new Error(`Capacity ${department} должна быть положительным числом`);
     }
 
-    const stageIds = new Set(input.locations.flatMap(location => location.tasks.map(task => task.stageId)));
-    validateDependencies(stageIds, dependencies);
+    const inputTasks = input.locations.flatMap(location => location.tasks);
+    const stageIds = new Set(inputTasks.map(task => task.stageId));
+    const activeDependencies = dependencies.filter(dependency =>
+      stageIds.has(dependency.from) && stageIds.has(dependency.to)
+    );
+    validateDependencies(stageIds, activeDependencies);
     for (const stageId of stageIds) {
-      const maxParallelPeople = stageCapacities && stageCapacities[stageId];
+      const tasksForStage = inputTasks.filter(task => task.stageId === stageId);
+      const isUnknown = tasksForStage.every(task => task.isUnknown);
+      const maxParallelPeople = isUnknown ? 1 : stageCapacities && stageCapacities[stageId];
       if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
         throw new Error(`Некорректный Max Parallel People: ${stageId}`);
       }
@@ -127,7 +133,7 @@
         locationOrder: location.order,
         priority: normalizePriority(location.priority),
         stageOrder: stageOrder.get(task.stageId),
-        maxParallelPeople: stageCapacities[task.stageId],
+        maxParallelPeople: task.isUnknown ? 1 : stageCapacities[task.stageId],
         remaining: task.estimate,
         allocation: [],
         completeIndex: task.estimate <= EPSILON ? -1 : null,
@@ -139,10 +145,10 @@
 
     for (const location of locations) {
       const byStage = new Map(location.tasks.map(task => [task.stageId, task]));
-      for (const dependency of dependencies) {
+      for (const dependency of activeDependencies) {
         const from = byStage.get(dependency.from);
         const to = byStage.get(dependency.to);
-        if (!from || !to) throw new Error(`В ${location.name} отсутствует этап dependency: ${dependency.from} → ${dependency.to}`);
+        if (!from || !to) continue;
         to.incoming.push({ ...dependency, taskId: from.id });
       }
     }
@@ -224,7 +230,7 @@
     return {
       locations,
       tasks,
-      dependencies,
+      dependencies: activeDependencies,
       stageCapacities: { ...stageCapacities },
       days: usedDays,
       startDate,

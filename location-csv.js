@@ -8,13 +8,15 @@
   const REQUIRED_COLUMNS = ['Location & Filler Space', 'Priority', 'Stage', 'Status', 'Est. Days', 'Notes'];
   const DEPENDENCY_COLUMNS = ['From Stage ID', 'To Stage ID', 'Type', 'Lag Days'];
   const STAGE_CAPACITY_COLUMNS = ['Stage ID', 'Max Parallel People'];
+  const STAGE_TEAM_COLUMNS = ['Stage', 'Team'];
   const DEPARTMENTS = Object.freeze([
     { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
     { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 80 },
     { id: 'levelArt', name: 'Level Art', css: 'loc-la', defaultCapacity: 40 },
     { id: 'modeling', name: '3D Outsource', css: 'loc-3d', defaultCapacity: 60 },
     { id: 'technicalArt', name: 'Technical Art', css: 'loc-ta', defaultCapacity: 20 },
-    { id: 'sound', name: 'Sound', css: 'loc-sound', defaultCapacity: 20 }
+    { id: 'sound', name: 'Sound', css: 'loc-sound', defaultCapacity: 20 },
+    { id: 'unknown', name: 'Unknown', css: 'loc-unknown', defaultCapacity: 20 }
   ]);
 
   const STAGES = Object.freeze({
@@ -106,11 +108,66 @@
     return direct[name] || [];
   }
 
-  function parseCsv(text) {
+  function unknownStageId(value) {
+    const normalized = normalizeStageName(value);
+    let hash = 2166136261;
+    for (let index = 0; index < normalized.length; index++) {
+      hash ^= normalized.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return `UNKNOWN_${(hash >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
+  }
+
+  function parseStageTeams(text) {
+    const rows = parseRows(text);
+    const { index } = columnReader(rows, STAGE_TEAM_COLUMNS);
+    const entries = [];
+    const names = new Set();
+    for (const row of rows.filter(row => row.some(value => String(value || '').trim()))) {
+      const stage = String(row[index('Stage')] || '').trim();
+      const team = String(row[index('Team')] || '').trim();
+      if (!stage || !team) throw new Error('Stage и Team не должны быть пустыми');
+      const normalized = normalizeStageName(stage);
+      if (names.has(normalized)) throw new Error(`Повтор этапа в stage teams CSV: ${stage}`);
+      const department = DEPARTMENTS.find(item =>
+        item.id.toLowerCase() === team.toLowerCase() || item.name.toLowerCase() === team.toLowerCase()
+      );
+      if (!department) throw new Error(`Неизвестная команда: ${team}`);
+      names.add(normalized);
+      entries.push({ stage, team: department.name, departmentId: department.id });
+    }
+    if (!entries.length) throw new Error('Stage teams CSV пуст');
+    return entries;
+  }
+
+  function mergeStageTeams(stageTeams, unknownStages) {
+    const result = stageTeams.map(entry => ({ ...entry }));
+    const names = new Set(result.map(entry => normalizeStageName(entry.stage)));
+    for (const unknownStage of unknownStages) {
+      const normalized = normalizeStageName(unknownStage.name);
+      if (!names.has(normalized)) {
+        result.push({ stage: unknownStage.name, team: 'Unknown', departmentId: 'unknown' });
+        names.add(normalized);
+      }
+    }
+    return result;
+  }
+
+  function serializeStageTeams(stageTeams) {
+    return [STAGE_TEAM_COLUMNS, ...stageTeams.map(entry => [entry.stage, entry.team])]
+      .map(row => row.map(csvCell).join(','))
+      .join('\n');
+  }
+
+  function parseCsv(text, stageTeams) {
+    const catalog = stageTeams || parseStageTeams(DEFAULT_STAGE_TEAMS_CSV);
+    const catalogByName = new Map(catalog.map(entry => [normalizeStageName(entry.stage), entry]));
     const rows = parseRows(text);
     const { index } = columnReader(rows, REQUIRED_COLUMNS);
     const locations = [];
     const excluded = [];
+    const unknownStages = [];
+    const unknownByName = new Map();
     let location = null;
 
     for (const row of rows) {
@@ -137,8 +194,16 @@
         continue;
       }
 
-      const stageIds = stagesForSourceName(sourceStage);
-      if (!stageIds.length) throw new Error(`Неизвестный этап: ${sourceStage}`);
+      let stageIds = stagesForSourceName(sourceStage);
+      if (!stageIds.length) {
+        const stageId = unknownStageId(sourceStage);
+        stageIds = [stageId];
+        if (!catalogByName.has(normalized) && !unknownByName.has(normalized)) {
+          const unknownStage = { id: stageId, name: sourceStage };
+          unknownByName.set(normalized, unknownStage);
+          unknownStages.push(unknownStage);
+        }
+      }
       const rawEstimate = String(row[index('Est. Days')] || '').trim();
       const estimate = rawEstimate === '' ? 0 : Number(rawEstimate.replace(',', '.'));
       if (!Number.isFinite(estimate) || estimate < 0) {
@@ -148,7 +213,10 @@
       const notes = String(row[index('Notes')] || '').trim();
 
       for (const stageId of stageIds) {
-        const stage = STAGES[stageId];
+        const registered = catalogByName.get(normalized);
+        const baseStage = STAGES[stageId] || { id: stageId, name: registered ? registered.stage : unknownByName.get(normalized).name, departmentId: 'unknown' };
+        const catalogEntry = catalogByName.get(normalizeStageName(baseStage.name)) || catalogByName.get(normalized);
+        const stage = { ...baseStage, departmentId: catalogEntry ? catalogEntry.departmentId : baseStage.departmentId };
         const department = DEPARTMENTS.find(item => item.id === stage.departmentId);
         if (location.tasks.some(task => task.stageId === stageId)) {
           throw new Error(`Повтор этапа: ${location.name} / ${stage.name}`);
@@ -163,13 +231,14 @@
           estimate,
           status,
           notes,
-          sourceStage
+          sourceStage,
+          isUnknown: !STAGES[stageId]
         });
       }
     }
 
     if (!locations.length) throw new Error('CSV не содержит локаций');
-    return { locations, excluded };
+    return { locations, excluded, unknownStages };
   }
 
   function parseDependencies(text) {
@@ -274,16 +343,34 @@ LIGHTING,1
 VISUAL_FX,1
 SOUND_FX,1`;
 
+  const DEFAULT_STAGE_TEAMS_CSV = `Stage,Team
+Concept,Design
+LD Macro Layout,Level Design
+LD Greybox,Level Design
+Gameplay Pass,Design
+LA Asset List,Level Art
+Modelling,3D Outsource
+LA Dressing,Level Art
+Lighting,Level Art
+Visual FX,Technical Art
+Sound FX,Sound`;
+
   return {
     REQUIRED_COLUMNS,
     DEPENDENCY_COLUMNS,
     STAGE_CAPACITY_COLUMNS,
+    STAGE_TEAM_COLUMNS,
     DEPARTMENTS,
     STAGES,
     DEFAULT_CSV: buildDefaultCsv(),
     DEFAULT_DEPENDENCIES_CSV,
     DEFAULT_STAGE_CAPACITY_CSV,
+    DEFAULT_STAGE_TEAMS_CSV,
     parseRows,
+    unknownStageId,
+    parseStageTeams,
+    mergeStageTeams,
+    serializeStageTeams,
     parseCsv,
     parseDependencies,
     parseStageCapacities
