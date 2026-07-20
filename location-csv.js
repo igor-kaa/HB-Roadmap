@@ -7,8 +7,7 @@
 
   const REQUIRED_COLUMNS = ['Location & Filler Space', 'Priority', 'Stage', 'Status', 'Est. Days', 'Notes'];
   const DEPENDENCY_COLUMNS = ['From Stage', 'To Stage', 'Type', 'Lag Days'];
-  const STAGE_CAPACITY_COLUMNS = ['Stage', 'Max Parallel People'];
-  const STAGE_TEAM_COLUMNS = ['Stage', 'Team'];
+  const STAGE_TEAM_CAPACITY_COLUMNS = ['Stage', 'Team', 'Max Parallel People'];
   const DEPARTMENTS = Object.freeze([
     { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
     { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 80 },
@@ -18,19 +17,6 @@
     { id: 'sound', name: 'Sound', css: 'loc-sound', defaultCapacity: 20 },
     { id: 'unknown', name: 'Unknown', css: 'loc-unknown', defaultCapacity: 20 }
   ]);
-
-  const STAGES = Object.freeze({
-    CONCEPT: { id: 'CONCEPT', name: 'Concept', departmentId: 'design' },
-    LD_MACRO: { id: 'LD_MACRO', name: 'LD Macro Layout', departmentId: 'levelDesign' },
-    LD_GREYBOX: { id: 'LD_GREYBOX', name: 'LD Greybox', departmentId: 'levelDesign' },
-    GAMEPLAY_PASS: { id: 'GAMEPLAY_PASS', name: 'Gameplay Pass', departmentId: 'design' },
-    LA_ASSET_LIST: { id: 'LA_ASSET_LIST', name: 'LA Asset List', departmentId: 'levelArt' },
-    MODELLING: { id: 'MODELLING', name: 'Modelling', departmentId: 'modeling' },
-    LA_DRESSING: { id: 'LA_DRESSING', name: 'LA Dressing', departmentId: 'levelArt' },
-    LIGHTING: { id: 'LIGHTING', name: 'Lighting', departmentId: 'levelArt' },
-    VISUAL_FX: { id: 'VISUAL_FX', name: 'Visual FX', departmentId: 'technicalArt' },
-    SOUND_FX: { id: 'SOUND_FX', name: 'Sound FX', departmentId: 'sound' }
-  });
 
   function parseRows(text) {
     const rows = [];
@@ -66,7 +52,7 @@
       }
     }
 
-    if (quoted) throw new Error('CSV содержит незакрытую кавычку');
+    if (quoted) throw new Error('CSV contains an unclosed quote');
     if (cell.length || row.length) {
       row.push(cell.replace(/\r$/, ''));
       rows.push(row);
@@ -75,11 +61,11 @@
   }
 
   function columnReader(rows, required) {
-    if (!rows.length) throw new Error('CSV пуст');
+    if (!rows.length) throw new Error('CSV is empty');
     const headers = rows.shift().map(value => value.trim());
     const index = name => headers.findIndex(header => header.toLowerCase() === name.toLowerCase());
     const missing = required.filter(name => index(name) < 0);
-    if (missing.length) throw new Error('CSV должен содержать: ' + missing.join(', '));
+    if (missing.length) throw new Error('CSV must contain: ' + missing.join(', '));
     return { index };
   }
 
@@ -89,91 +75,91 @@
 
   function stageIdForName(value) {
     const normalized = normalizeStageName(value);
-    const stage = Object.values(STAGES).find(item => normalizeStageName(item.name) === normalized);
-    return stage ? stage.id : null;
-  }
-
-  function stagesForSourceName(value) {
-    const name = normalizeStageName(value);
-    const direct = {
-      'concept': ['CONCEPT'],
-      'ld macro layout': ['LD_MACRO'],
-      'ld greybox': ['LD_GREYBOX'],
-      'gameplay pass': ['GAMEPLAY_PASS'],
-      'la asset list': ['LA_ASSET_LIST'],
-      'modelling': ['MODELLING'],
-      'modeling': ['MODELLING'],
-      'la dressing': ['LA_DRESSING'],
-      'lighting': ['LIGHTING'],
-      'visual fx': ['VISUAL_FX'],
-      'sound fx': ['SOUND_FX'],
-      'lighting & vfx': ['LIGHTING', 'VISUAL_FX', 'SOUND_FX'],
-      'lighting & vfx ': ['LIGHTING', 'VISUAL_FX', 'SOUND_FX'],
-      'vfx': ['VISUAL_FX', 'SOUND_FX']
-    };
-    return direct[name] || [];
-  }
-
-  function unknownStageId(value) {
-    const normalized = normalizeStageName(value);
     let hash = 2166136261;
     for (let index = 0; index < normalized.length; index++) {
       hash ^= normalized.charCodeAt(index);
       hash = Math.imul(hash, 16777619);
     }
-    return `UNKNOWN_${(hash >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
+    return `STAGE_${(hash >>> 0).toString(16).toUpperCase().padStart(8, '0')}`;
   }
 
-  function parseStageTeams(text) {
+  function findDepartment(team) {
+    const normalized = String(team || '').trim().toLowerCase();
+    return DEPARTMENTS.find(item => item.id.toLowerCase() === normalized || item.name.toLowerCase() === normalized);
+  }
+
+  function parseStageTeamCapacities(text) {
     const rows = parseRows(text);
-    const { index } = columnReader(rows, STAGE_TEAM_COLUMNS);
+    const { index } = columnReader(rows, STAGE_TEAM_CAPACITY_COLUMNS);
     const entries = [];
     const names = new Set();
+
     for (const row of rows.filter(row => row.some(value => String(value || '').trim()))) {
       const stage = String(row[index('Stage')] || '').trim();
       const team = String(row[index('Team')] || '').trim();
-      if (!stage || !team) throw new Error('Stage и Team не должны быть пустыми');
+      const rawCapacity = String(row[index('Max Parallel People')] || '').trim();
+      const maxParallelPeople = Number(rawCapacity);
+      if (!stage || !team || rawCapacity === '') throw new Error('Stage, Team and Max Parallel People must not be empty');
       const normalized = normalizeStageName(stage);
-      if (names.has(normalized)) throw new Error(`Повтор этапа в stage teams CSV: ${stage}`);
-      const department = DEPARTMENTS.find(item =>
-        item.id.toLowerCase() === team.toLowerCase() || item.name.toLowerCase() === team.toLowerCase()
-      );
-      if (!department) throw new Error(`Неизвестная команда: ${team}`);
+      if (names.has(normalized)) throw new Error(`Duplicate stage in stage/team/capacity CSV: ${stage}`);
+      const department = findDepartment(team);
+      if (!department) throw new Error(`Unknown team: ${team}`);
+      if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
+        throw new Error(`Max Parallel People must be an integer >= 0: ${stage}`);
+      }
       names.add(normalized);
-      entries.push({ stage, team: department.name, departmentId: department.id });
+      entries.push({
+        id: stageIdForName(stage),
+        stage,
+        team: department.name,
+        departmentId: department.id,
+        maxParallelPeople
+      });
     }
-    if (!entries.length) throw new Error('Stage teams CSV пуст');
+
+    if (!entries.length) throw new Error('Stage/team/capacity CSV is empty');
     return entries;
   }
 
-  function mergeStageTeams(stageTeams, unknownStages) {
-    const result = stageTeams.map(entry => ({ ...entry }));
+  function mergeStageTeamCapacities(stageCatalog, stages) {
+    const result = stageCatalog.map(entry => ({ ...entry }));
     const names = new Set(result.map(entry => normalizeStageName(entry.stage)));
-    for (const unknownStage of unknownStages) {
-      const normalized = normalizeStageName(unknownStage.name);
-      if (!names.has(normalized)) {
-        result.push({ stage: unknownStage.name, team: 'Unknown', departmentId: 'unknown' });
-        names.add(normalized);
-      }
+    for (const stage of stages || []) {
+      const name = stage.name || stage.stage;
+      const normalized = normalizeStageName(name);
+      if (!normalized || names.has(normalized)) continue;
+      result.push({
+        id: stageIdForName(name),
+        stage: name,
+        team: 'Unknown',
+        departmentId: 'unknown',
+        maxParallelPeople: 1
+      });
+      names.add(normalized);
     }
     return result;
   }
 
-  function serializeStageTeams(stageTeams) {
-    return [STAGE_TEAM_COLUMNS, ...stageTeams.map(entry => [entry.stage, entry.team])]
-      .map(row => row.map(csvCell).join(','))
-      .join('\n');
+  function csvCell(value) {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   }
 
-  function parseCsv(text, stageTeams) {
-    const catalog = stageTeams || parseStageTeams(DEFAULT_STAGE_TEAMS_CSV);
+  function serializeStageTeamCapacities(stageCatalog) {
+    return [
+      STAGE_TEAM_CAPACITY_COLUMNS,
+      ...stageCatalog.map(entry => [entry.stage, entry.team, entry.maxParallelPeople])
+    ].map(row => row.map(csvCell).join(',')).join('\n');
+  }
+
+  function parseCsv(text, stageCatalog) {
+    const catalog = stageCatalog || [];
     const catalogByName = new Map(catalog.map(entry => [normalizeStageName(entry.stage), entry]));
     const rows = parseRows(text);
     const { index } = columnReader(rows, REQUIRED_COLUMNS);
     const locations = [];
-    const excluded = [];
-    const unknownStages = [];
-    const unknownByName = new Map();
+    const unconfiguredStages = [];
+    const unconfiguredByName = new Map();
     let location = null;
 
     for (const row of rows) {
@@ -194,60 +180,44 @@
       const sourceStage = String(row[index('Stage')] || '').trim();
       if (!sourceStage) continue;
       const normalized = normalizeStageName(sourceStage);
-      if (normalized === 'total') continue;
-      if (normalized === 'gameplay balancing' || normalized === 'qa / playtest') {
-        excluded.push({ locationId: location.id, locationName: location.name, stage: sourceStage });
-        continue;
+      const registered = catalogByName.get(normalized);
+      if (!registered && !unconfiguredByName.has(normalized)) {
+        const unconfigured = { id: stageIdForName(sourceStage), name: sourceStage };
+        unconfiguredByName.set(normalized, unconfigured);
+        unconfiguredStages.push(unconfigured);
       }
-
-      let stageIds = stagesForSourceName(sourceStage);
-      if (!stageIds.length) {
-        const stageId = unknownStageId(sourceStage);
-        stageIds = [stageId];
-        if (!catalogByName.has(normalized) && !unknownByName.has(normalized)) {
-          const unknownStage = { id: stageId, name: sourceStage };
-          unknownByName.set(normalized, unknownStage);
-          unknownStages.push(unknownStage);
-        }
-      }
+      const stageId = registered ? registered.id : unconfiguredByName.get(normalized).id;
       const rawEstimate = String(row[index('Est. Days')] || '').trim();
       const estimate = rawEstimate === '' ? 0 : Number(rawEstimate.replace(',', '.'));
       if (!Number.isFinite(estimate) || estimate < 0) {
-        throw new Error(`Некорректная оценка: ${location.name} / ${sourceStage}`);
+        throw new Error(`Invalid estimate: ${location.name} / ${sourceStage}`);
       }
-      const status = String(row[index('Status')] || '').trim();
-      const notes = String(row[index('Notes')] || '').trim();
+      if (location.tasks.some(task => task.stageId === stageId)) {
+        throw new Error(`Duplicate stage: ${location.name} / ${sourceStage}`);
+      }
 
-      for (const stageId of stageIds) {
-        const registered = catalogByName.get(normalized);
-        const baseStage = STAGES[stageId] || { id: stageId, name: registered ? registered.stage : unknownByName.get(normalized).name, departmentId: 'unknown' };
-        const catalogEntry = catalogByName.get(normalizeStageName(baseStage.name)) || catalogByName.get(normalized);
-        const stage = { ...baseStage, departmentId: catalogEntry ? catalogEntry.departmentId : baseStage.departmentId };
-        const department = DEPARTMENTS.find(item => item.id === stage.departmentId);
-        if (location.tasks.some(task => task.stageId === stageId)) {
-          throw new Error(`Повтор этапа: ${location.name} / ${stage.name}`);
-        }
-        location.tasks.push({
-          id: `${location.id}:${stageId}`,
-          stageId,
-          stageName: stage.name,
-          departmentId: stage.departmentId,
-          department: department.name,
-          departmentCss: department.css,
-          estimate,
-          status,
-          notes,
-          sourceStage,
-          isUnknown: !STAGES[stageId]
-        });
-      }
+      const department = registered ? findDepartment(registered.team) : findDepartment('Unknown');
+      location.tasks.push({
+        id: `${location.id}:${stageId}`,
+        stageId,
+        stageName: registered ? registered.stage : sourceStage,
+        departmentId: department.id,
+        department: department.name,
+        departmentCss: department.css,
+        estimate,
+        status: String(row[index('Status')] || '').trim(),
+        notes: String(row[index('Notes')] || '').trim(),
+        sourceStage,
+        isUnconfigured: !registered
+      });
     }
 
-    if (!locations.length) throw new Error('CSV не содержит локаций');
-    return { locations, excluded, unknownStages };
+    if (!locations.length) throw new Error('CSV contains no locations');
+    return { locations, unconfiguredStages };
   }
 
-  function parseDependencies(text) {
+  function parseDependencies(text, stageCatalog) {
+    const catalogByName = new Map((stageCatalog || []).map(entry => [normalizeStageName(entry.stage), entry]));
     const rows = parseRows(text);
     const { index } = columnReader(rows, DEPENDENCY_COLUMNS);
     const dependencies = rows
@@ -255,133 +225,36 @@
       .map(row => {
         const fromName = String(row[index('From Stage')] || '').trim();
         const toName = String(row[index('To Stage')] || '').trim();
-        const from = stageIdForName(fromName);
-        const to = stageIdForName(toName);
+        const fromStage = catalogByName.get(normalizeStageName(fromName));
+        const toStage = catalogByName.get(normalizeStageName(toName));
         const type = String(row[index('Type')] || 'FS').trim().toUpperCase();
         const lag = Number(String(row[index('Lag Days')] || '0').trim());
-        if (!from || !to) throw new Error(`Неизвестная стадия в dependency: ${fromName} → ${toName}`);
-        if (!['FS', 'FF'].includes(type)) throw new Error(`Поддерживаются только FS и FF: ${from} → ${to}`);
-        if (!Number.isInteger(lag) || lag < 0) throw new Error(`Lag Days должен быть целым числом ≥ 0: ${from} → ${to}`);
-        return { from, to, type, lag };
+        if (!fromStage || !toStage) throw new Error(`Dependency references a stage outside estimates and stage/team/capacity CSV: ${fromName} -> ${toName}`);
+        if (!['FS', 'FF'].includes(type)) throw new Error(`Only FS and FF dependencies are supported: ${fromName} -> ${toName}`);
+        if (!Number.isInteger(lag) || lag < 0) throw new Error(`Lag Days must be an integer >= 0: ${fromName} -> ${toName}`);
+        return { from: fromStage.id, to: toStage.id, type, lag };
       });
-    if (!dependencies.length) throw new Error('CSV dependencies пуст');
+    if (!dependencies.length) throw new Error('Dependencies CSV is empty');
     return dependencies;
   }
 
-  function parseStageCapacities(text) {
-    const rows = parseRows(text);
-    const { index } = columnReader(rows, STAGE_CAPACITY_COLUMNS);
-    const capacities = {};
-    for (const row of rows.filter(row => row.some(value => String(value || '').trim()))) {
-      const stageName = String(row[index('Stage')] || '').trim();
-      const stageId = stageIdForName(stageName);
-      const maxParallelPeople = Number(String(row[index('Max Parallel People')] || '').trim());
-      if (!stageId) throw new Error(`Неизвестная стадия в stage capacity: ${stageName}`);
-      if (Object.prototype.hasOwnProperty.call(capacities, stageId)) throw new Error(`Повтор стадии в stage capacity: ${stageName}`);
-      if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
-        throw new Error(`Max Parallel People должен быть целым числом ≥ 0: ${stageId}`);
-      }
-      capacities[stageId] = maxParallelPeople;
-    }
-    const missing = Object.keys(STAGES).filter(stageId => !Object.prototype.hasOwnProperty.call(capacities, stageId));
-    if (missing.length) throw new Error('Stage capacity CSV не содержит: ' + missing.join(', '));
-    return capacities;
+  function stageCapacities(stageCatalog) {
+    return Object.fromEntries((stageCatalog || []).map(entry => [entry.id, entry.maxParallelPeople]));
   }
-
-  function csvCell(value) {
-    const text = String(value ?? '');
-    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-  }
-
-  function buildDefaultCsv() {
-    const names = [
-      'Beach (Rocky Coast)',
-      'Tartarian Hall - Medium Compound',
-      'Suomi Village - Big Compound',
-      'Dungeon (Automaton Factory) - Huge Compound',
-      'ObeliskTeleportA (Rocky Coast)',
-      'ObeliskTeleportB (Suomi Village)',
-      'SampoRoom (Small Compound)',
-      'Background - All',
-      'Filler Space - All (without POI, Compounds)',
-      'Star Fortress (Big Compound)'
-    ];
-    const stages = [
-      'Concept', 'LD Macro Layout', 'LD Greybox', 'Gameplay Pass', 'LA Asset List',
-      'Modelling', 'LA Dressing', 'Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest'
-    ];
-    const lines = [REQUIRED_COLUMNS.join(',')];
-    names.forEach((name, locationIndex) => {
-      stages.forEach((stage, stageIndex) => {
-        let status = '';
-        if (locationIndex === 0 && ['Concept', 'LD Macro Layout', 'LD Greybox'].includes(stage)) status = 'Approved';
-        if (locationIndex === 0 && ['LA Asset List', 'Modelling'].includes(stage)) status = 'Work In Progress';
-        if (locationIndex === 0 && ['Gameplay Balancing', 'QA / Playtest'].includes(stage)) status = 'Not Started';
-        if (locationIndex === 2 && stage === 'Concept') status = 'Approved';
-        lines.push([
-          stageIndex === 0 ? name : '', '', stage, status, 10, ''
-        ].map(csvCell).join(','));
-      });
-      lines.push(['', '', 'Total', '', 10, ''].join(','));
-      if (locationIndex < names.length - 1) lines.push(',,,,,');
-    });
-    return lines.join('\n');
-  }
-
-  const DEFAULT_DEPENDENCIES_CSV = `From Stage,To Stage,Type,Lag Days
-Concept,LD Macro Layout,FS,0
-LD Macro Layout,LD Greybox,FS,0
-LD Greybox,Gameplay Pass,FS,0
-Concept,LA Asset List,FS,0
-LA Asset List,Modelling,FS,0
-LD Greybox,LA Dressing,FS,0
-Modelling,LA Dressing,FF,0
-LA Dressing,Lighting,FS,0
-LD Greybox,Visual FX,FS,0
-LD Greybox,Sound FX,FS,0`;
-
-  const DEFAULT_STAGE_CAPACITY_CSV = `Stage,Max Parallel People
-Concept,1
-LD Macro Layout,1
-LD Greybox,1
-Gameplay Pass,1
-LA Asset List,1
-Modelling,1
-LA Dressing,1
-Lighting,1
-Visual FX,1
-Sound FX,1`;
-
-  const DEFAULT_STAGE_TEAMS_CSV = `Stage,Team
-Concept,Design
-LD Macro Layout,Level Design
-LD Greybox,Level Design
-Gameplay Pass,Design
-LA Asset List,Level Art
-Modelling,3D Outsource
-LA Dressing,Level Art
-Lighting,Level Art
-Visual FX,Technical Art
-Sound FX,Sound`;
 
   return {
     REQUIRED_COLUMNS,
     DEPENDENCY_COLUMNS,
-    STAGE_CAPACITY_COLUMNS,
-    STAGE_TEAM_COLUMNS,
+    STAGE_TEAM_CAPACITY_COLUMNS,
     DEPARTMENTS,
-    STAGES,
-    DEFAULT_CSV: buildDefaultCsv(),
-    DEFAULT_DEPENDENCIES_CSV,
-    DEFAULT_STAGE_CAPACITY_CSV,
-    DEFAULT_STAGE_TEAMS_CSV,
     parseRows,
-    unknownStageId,
-    parseStageTeams,
-    mergeStageTeams,
-    serializeStageTeams,
+    normalizeStageName,
+    stageIdForName,
+    parseStageTeamCapacities,
+    mergeStageTeamCapacities,
+    serializeStageTeamCapacities,
     parseCsv,
     parseDependencies,
-    parseStageCapacities
+    stageCapacities
   };
 });

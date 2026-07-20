@@ -13,26 +13,35 @@
   const DEPENDENCY_COLUMN_GAP = 64;
   const DEPENDENCY_ROW_GAP = 22;
   const DEPENDENCY_GRAPH_PADDING = 28;
+  const DEFAULT_FILES = Object.freeze({
+    estimates: 'location-estimates.csv',
+    dependencies: 'location-dependencies.csv',
+    stageCatalog: 'location-stage-team-capacity.csv'
+  });
   const STORAGE_KEYS = Object.freeze({
     estimates: 'hyperborea.locations.estimates.v1',
     dependencies: 'hyperborea.locations.dependencies.v1',
-    stageCapacities: 'hyperborea.locations.stage-capacities.v1',
-    stageTeams: 'hyperborea.locations.stage-teams.v1'
+    stageCatalog: 'hyperborea.locations.stage-team-capacity.v1'
   });
+  const LEGACY_STORAGE_KEYS = Object.freeze([
+    'hyperborea.locations.stage-capacities.v1',
+    'hyperborea.locations.stage-teams.v1'
+  ]);
   const browserStorage = getBrowserStorage();
-  const restoredStageTeams = restoreCsv(STORAGE_KEYS.stageTeams, Csv.parseStageTeams, Csv.DEFAULT_STAGE_TEAMS_CSV, 'Built-in stage teams');
-  let stageTeams = restoredStageTeams.value;
-  const restoredInput = restoreCsv(STORAGE_KEYS.estimates, text => Csv.parseCsv(text, stageTeams), Csv.DEFAULT_CSV, 'Built-in estimates');
-  const restoredDependencies = restoreCsv(STORAGE_KEYS.dependencies, Csv.parseDependencies, Csv.DEFAULT_DEPENDENCIES_CSV, 'Built-in dependencies');
-  const restoredStageCapacities = restoreCsv(STORAGE_KEYS.stageCapacities, Csv.parseStageCapacities, Csv.DEFAULT_STAGE_CAPACITY_CSV, 'Built-in parallelism');
+  const defaultTexts = Object.fromEntries(Object.entries(DEFAULT_FILES).map(([key, filename]) => [key, loadExternalCsv(filename)]));
+  const restoredStageCatalog = restoreCsv(STORAGE_KEYS.stageCatalog, Csv.parseStageTeamCapacities, defaultTexts.stageCatalog, DEFAULT_FILES.stageCatalog);
+  let stageCatalog = restoredStageCatalog.value || [];
+  const restoredInput = restoreCsv(STORAGE_KEYS.estimates, text => Csv.parseCsv(text, stageCatalog), defaultTexts.estimates, DEFAULT_FILES.estimates);
   let input = restoredInput.value;
   let estimatesText = restoredInput.text;
-  let dependencies = restoredDependencies.value;
-  let stageCapacities = restoredStageCapacities.value;
+  if (input) stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
+  let dependenciesText = restoreCsvText(STORAGE_KEYS.dependencies, defaultTexts.dependencies, DEFAULT_FILES.dependencies);
+  let dependencies = dependenciesForCurrentCatalog(false);
+  let stageCapacities = Csv.stageCapacities(stageCatalog);
   let csvSources = {
     estimates: restoredInput.name,
-    dependencies: restoredDependencies.name,
-    stageCapacities: restoredStageCapacities.name
+    dependencies: dependenciesText.name,
+    stageCatalog: restoredStageCatalog.name
   };
   let state = null;
   let selected = null;
@@ -43,6 +52,20 @@
     } catch (error) {
       return null;
     }
+  }
+
+  function loadExternalCsv(filename) {
+    try {
+      const request = new XMLHttpRequest();
+      request.open('GET', filename, false);
+      request.send(null);
+      if ((request.status === 0 || (request.status >= 200 && request.status < 300)) && request.responseText) {
+        return request.responseText;
+      }
+    } catch (error) {
+      console.warn(`Default CSV is unavailable: ${filename}`, error);
+    }
+    return '';
   }
 
   function restoreCsv(key, parser, defaultText, defaultName) {
@@ -60,7 +83,36 @@
         console.warn(`Saved CSV ignored: ${key}`, error);
       }
     }
-    return { value: parser(defaultText), name: defaultName, text: defaultText };
+    return defaultText
+      ? { value: parser(defaultText), name: defaultName, text: defaultText }
+      : { value: null, name: 'Not loaded', text: '' };
+  }
+
+  function restoreCsvText(key, defaultText, defaultName) {
+    if (browserStorage) {
+      try {
+        const savedText = browserStorage.getItem(key);
+        if (savedText) {
+          const saved = JSON.parse(savedText);
+          if (saved && typeof saved.text === 'string') return { name: saved.name || 'Saved CSV', text: saved.text };
+        }
+      } catch (error) {
+        try { browserStorage.removeItem(key); } catch (storageError) { /* storage unavailable */ }
+        console.warn(`Saved CSV ignored: ${key}`, error);
+      }
+    }
+    return defaultText ? { name: defaultName, text: defaultText } : { name: 'Not loaded', text: '' };
+  }
+
+  function dependenciesForCurrentCatalog(strict) {
+    if (!dependenciesText || !dependenciesText.text) return [];
+    try {
+      return Csv.parseDependencies(dependenciesText.text, stageCatalog);
+    } catch (error) {
+      if (strict) throw error;
+      console.warn('Dependencies CSV ignored until its stages are available', error);
+      return [];
+    }
   }
 
   function saveCsv(key, name, text) {
@@ -76,19 +128,24 @@
 
   function resetSavedCsv() {
     if (browserStorage) {
-      for (const key of Object.values(STORAGE_KEYS)) {
+      for (const key of [...Object.values(STORAGE_KEYS), ...LEGACY_STORAGE_KEYS]) {
         try { browserStorage.removeItem(key); } catch (error) { /* storage unavailable */ }
       }
     }
-    input = Csv.parseCsv(Csv.DEFAULT_CSV);
-    estimatesText = Csv.DEFAULT_CSV;
-    stageTeams = Csv.parseStageTeams(Csv.DEFAULT_STAGE_TEAMS_CSV);
-    dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
-    stageCapacities = Csv.parseStageCapacities(Csv.DEFAULT_STAGE_CAPACITY_CSV);
+    stageCatalog = defaultTexts.stageCatalog ? Csv.parseStageTeamCapacities(defaultTexts.stageCatalog) : [];
+    input = defaultTexts.estimates ? Csv.parseCsv(defaultTexts.estimates, stageCatalog) : null;
+    estimatesText = defaultTexts.estimates;
+    if (input) stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
+    dependenciesText = {
+      name: defaultTexts.dependencies ? DEFAULT_FILES.dependencies : 'Not loaded',
+      text: defaultTexts.dependencies
+    };
+    dependencies = dependenciesForCurrentCatalog(false);
+    stageCapacities = Csv.stageCapacities(stageCatalog);
     csvSources = {
-      estimates: 'Built-in estimates',
-      dependencies: 'Built-in dependencies',
-      stageCapacities: 'Built-in parallelism'
+      estimates: defaultTexts.estimates ? DEFAULT_FILES.estimates : 'Not loaded',
+      dependencies: dependenciesText.name,
+      stageCatalog: defaultTexts.stageCatalog ? DEFAULT_FILES.stageCatalog : 'Not loaded'
     };
     recalculate();
   }
@@ -174,27 +231,19 @@
     const total = state.tasks.reduce((sum, task) => sum + task.estimate, 0);
     const sprints = Math.ceil(Scheduler.daysBetween(state.startDate, Scheduler.addDays(state.endDate, 1)) / 14);
     const ffCount = state.dependencies.filter(item => item.type === 'FF').length;
-    const cards = [
-      ['Локации', state.locations.length, `${state.tasks.length} production-задач`],
-      ['Общий объём', `${total.toFixed(0)} mdays`, 'без Gameplay Balancing и QA'],
-      ['Окончание production', fmt(state.endDate), `${sprints} спринтов`],
-      ['Milestone-работы', input.excluded.length, 'пока исключены из расчёта'],
-      ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', `0 = unlimited · ${csvSources.stageCapacities}`]
-    ];
     const uploadAction = (id, label) =>
       `<label class="summary-card-action" for="${id}" title="${label}" aria-label="${label}">↥</label>`;
     const downloadAction = (href, label, id = '') =>
       `<a class="summary-card-action"${id ? ` id="${id}"` : ''} href="${href}" download title="${label}" aria-label="${label}">⇩</a>`;
-    const cardsHtml = cards.map((card, index) => {
-      if (index === 3) return `<div class="card summary-card-with-actions"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div><div class="summary-card-actions">${uploadAction('stageTeamsCsvFile', 'Загрузить CSV этапов и команд')}${downloadAction('location-stage-teams.csv', 'Скачать CSV этапов и команд', 'stageTeamsExportAction')}</div></div>`;
-      if (index === 4) return `<div class="card summary-card-with-actions"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div><div class="summary-card-actions">${uploadAction('stageCapacityCsvFile', 'Загрузить CSV parallel people')}${downloadAction('location-stage-capacity.csv', 'Скачать CSV parallel people')}</div></div>`;
-      return `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`;
-    });
-    cardsHtml.splice(3, 0,
-      `<div class="card dependency-summary-card summary-card-with-actions" id="dependencySummaryCard" tabindex="0" role="button" aria-label="View graph of ${state.dependencies.length} dependencies"><div class="cl">Dependencies</div><div class="cv">${state.dependencies.length}</div><div class="cn">${ffCount} Finish-to-Finish <span>View graph →</span></div><div class="summary-card-actions">${uploadAction('dependenciesCsvFile', 'Загрузить CSV с dependencies')}${downloadAction('location-dependencies.csv', 'Скачать dependencies CSV')}</div></div>`
-    );
-    document.getElementById('locationSummary').innerHTML = cardsHtml.join('') + (input.unknownStages.length
-      ? `<div class="card error-card"><div class="cl">Неизвестные этапы</div><div class="cv">${input.unknownStages.length}</div><div class="cn">${esc(input.unknownStages.map(stage => stage.name).join(', '))} · команда Unknown, capacity 20</div></div>`
+    const cardsHtml = [
+      `<div class="card"><div class="cl">Локации</div><div class="cv">${state.locations.length}</div><div class="cn">${state.tasks.length} production-задач</div></div>`,
+      `<div class="card"><div class="cl">Общий объём</div><div class="cv">${total.toFixed(0)} mdays</div><div class="cn">${esc(csvSources.estimates)}</div></div>`,
+      `<div class="card"><div class="cl">Окончание production</div><div class="cv">${fmt(state.endDate)}</div><div class="cn">${sprints} спринтов</div></div>`,
+      `<div class="card dependency-summary-card summary-card-with-actions" id="dependencySummaryCard" tabindex="0" role="button" aria-label="View graph of ${state.dependencies.length} dependencies"><div class="cl">Dependencies</div><div class="cv">${state.dependencies.length}</div><div class="cn">${ffCount} Finish-to-Finish <span>View graph →</span></div><div class="summary-card-actions">${uploadAction('dependenciesCsvFile', 'Загрузить CSV с dependencies')}${downloadAction('location-dependencies.csv', 'Скачать dependencies CSV')}</div></div>`,
+      `<div class="card summary-card-with-actions"><div class="cl">Stage catalog</div><div class="cv">${stageCatalog.length}</div><div class="cn">team + parallelism · ${esc(csvSources.stageCatalog)}</div><div class="summary-card-actions">${uploadAction('stageTeamCapacityCsvFile', 'Загрузить CSV этапов, команд и capacity')}${downloadAction('location-stage-team-capacity.csv', 'Скачать CSV этапов, команд и capacity', 'stageTeamCapacityExportAction')}</div></div>`
+    ];
+    document.getElementById('locationSummary').innerHTML = cardsHtml.join('') + (input.unconfiguredStages.length
+      ? `<div class="card error-card"><div class="cl">Stages added from estimates</div><div class="cv">${input.unconfiguredStages.length}</div><div class="cn">${esc(input.unconfiguredStages.map(stage => stage.name).join(', '))} · Unknown team, 1 parallel person</div></div>`
       : '');
     const dependencyCard = document.getElementById('dependencySummaryCard');
     dependencyCard.addEventListener('click', event => {
@@ -206,19 +255,19 @@
         openDependencyGraph();
       }
     });
-    document.getElementById('stageTeamsExportAction').addEventListener('click', event => {
+    document.getElementById('stageTeamCapacityExportAction').addEventListener('click', event => {
       event.preventDefault();
-      exportStageTeams();
+      exportStageTeamCapacities();
     });
   }
 
   function dependencyStageInfo(stageId) {
     const task = state.tasks.find(item => item.stageId === stageId);
-    const stage = Csv.STAGES[stageId];
+    const stage = stageCatalog.find(item => item.id === stageId);
     if (task) return { name: task.stageName, department: task.department, departmentCss: task.departmentCss };
     const department = stage && Csv.DEPARTMENTS.find(item => item.id === stage.departmentId);
     return {
-      name: stage ? stage.name : stageId,
+      name: stage ? stage.stage : stageId,
       department: department ? department.name : 'Unknown',
       departmentCss: department ? department.css : 'loc-unknown'
     };
@@ -232,7 +281,7 @@
         depths.set(edge.to, Math.max(depths.get(edge.to), depths.get(edge.from) + 1));
       }
     }
-    const stageOrder = new Map(Object.keys(Csv.STAGES).map((stageId, index) => [stageId, index]));
+    const stageOrder = new Map(stageCatalog.map((stage, index) => [stage.id, index]));
     const columns = new Map();
     for (const stageId of nodeIds) {
       const depth = depths.get(stageId);
@@ -331,9 +380,9 @@
     else dialog.classList.remove('open');
   }
 
-  function warnUnknownStages(parsed) {
-    if (parsed.unknownStages.length) {
-      alert(`Неизвестные этапы: ${parsed.unknownStages.map(stage => stage.name).join(', ')}. Они добавлены в план под командой Unknown с capacity 20.`);
+  function warnUnconfiguredStages(parsed) {
+    if (parsed.unconfiguredStages.length) {
+      alert(`Этапы из estimates добавлены в stage catalog: ${parsed.unconfiguredStages.map(stage => stage.name).join(', ')}. Для них назначены Unknown team и 1 parallel person.`);
     }
   }
 
@@ -429,15 +478,40 @@
     renderGantt();
   }
 
+  function renderAwaitingEstimates() {
+    state = null;
+    document.getElementById('locationExportButton').disabled = true;
+    document.getElementById('locationSummary').innerHTML = `
+      <div class="card summary-card-with-actions">
+        <div class="cl">Estimates CSV</div><div class="cv">Required</div>
+        <div class="cn">Загрузите CSV с оценками — план построится сразу</div>
+        <div class="summary-card-actions"><label class="summary-card-action" for="locationsCsvFile" title="Загрузить estimates CSV">↥</label></div>
+      </div>
+      <div class="card summary-card-with-actions">
+        <div class="cl">Stage catalog</div><div class="cv">${stageCatalog.length || 'Optional'}</div>
+        <div class="cn">Команды и parallelism можно загрузить до или после estimates</div>
+        <div class="summary-card-actions"><label class="summary-card-action" for="stageTeamCapacityCsvFile" title="Загрузить stage/team/capacity CSV">↥</label></div>
+      </div>`;
+    document.getElementById('locationGantt').innerHTML = '<div class="empty">Ожидание estimates CSV</div>';
+    document.getElementById('locationCapacity').innerHTML = '';
+  }
+
   function recalculate() {
+    if (!input) {
+      renderAwaitingEstimates();
+      return;
+    }
     try {
       state = Scheduler.schedule(input, dependencies, stageCapacities, document.getElementById('locationStartDate').value, readCapacities());
+      document.getElementById('locationExportButton').disabled = false;
       selected = null;
       document.getElementById('locationDrawer').classList.remove('open');
       renderSummary();
       renderGantt();
       renderCapacity();
     } catch (error) {
+      state = null;
+      document.getElementById('locationExportButton').disabled = true;
       console.error(error);
       document.getElementById('locationSummary').innerHTML = `<div class="card error-card"><div class="cl">Ошибка расчёта</div><div class="cn">${esc(error.message)}</div></div>`;
       document.getElementById('locationGantt').innerHTML = `<div class="empty">${esc(error.message)}</div>`;
@@ -450,6 +524,7 @@
   }
 
   function exportCsv() {
+    if (!state) return;
     const header = ['Location ID', 'Location', 'Priority', 'Stage ID', 'Stage', 'Department', 'Max Parallel People', 'Status', 'Estimate', 'Start', 'Finish'];
     const lines = [header.map(csvCell).join(',')];
     for (const location of state.locations) {
@@ -472,12 +547,12 @@
     URL.revokeObjectURL(url);
   }
 
-  function exportStageTeams() {
-    const blob = new Blob(['\ufeff' + Csv.serializeStageTeams(stageTeams)], { type: 'text/csv;charset=utf-8' });
+  function exportStageTeamCapacities() {
+    const blob = new Blob(['\ufeff' + Csv.serializeStageTeamCapacities(stageCatalog)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'location-stage-teams.csv';
+    link.download = 'location-stage-team-capacity.csv';
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -486,7 +561,7 @@
   document.getElementById('locationRecalcButton').addEventListener('click', recalculate);
   document.getElementById('locationSearch').addEventListener('input', renderGantt);
   document.getElementById('locationExportButton').addEventListener('click', exportCsv);
-  document.getElementById('stageTeamsExportButton').addEventListener('click', exportStageTeams);
+  document.getElementById('stageTeamCapacityExportButton').addEventListener('click', exportStageTeamCapacities);
   document.getElementById('resetSavedCsvButton').addEventListener('click', resetSavedCsv);
   document.getElementById('locationCloseDrawerButton').addEventListener('click', () => {
     selected = null;
@@ -502,11 +577,13 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const text = await file.text();
-      input = Csv.parseCsv(text, stageTeams);
+      input = Csv.parseCsv(text, stageCatalog);
       estimatesText = text;
-      stageTeams = Csv.mergeStageTeams(stageTeams, input.unknownStages);
-      saveCsv(STORAGE_KEYS.stageTeams, 'Updated stage teams', Csv.serializeStageTeams(stageTeams));
-      warnUnknownStages(input);
+      stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
+      stageCapacities = Csv.stageCapacities(stageCatalog);
+      dependencies = dependenciesForCurrentCatalog(true);
+      saveCsv(STORAGE_KEYS.stageCatalog, 'Updated stage catalog', Csv.serializeStageTeamCapacities(stageCatalog));
+      warnUnconfiguredStages(input);
       saveCsv(STORAGE_KEYS.estimates, file.name, text);
       csvSources.estimates = file.name;
       recalculate();
@@ -515,15 +592,21 @@
       alert(error.message);
     }
   });
-  document.getElementById('stageTeamsCsvFile').addEventListener('change', async event => {
+  document.getElementById('stageTeamCapacityCsvFile').addEventListener('change', async event => {
     try {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const text = await file.text();
-      stageTeams = Csv.parseStageTeams(text);
-      input = Csv.parseCsv(estimatesText, stageTeams);
-      stageTeams = Csv.mergeStageTeams(stageTeams, input.unknownStages);
-      saveCsv(STORAGE_KEYS.stageTeams, file.name, Csv.serializeStageTeams(stageTeams));
+      stageCatalog = Csv.parseStageTeamCapacities(text);
+      if (estimatesText) {
+        input = Csv.parseCsv(estimatesText, stageCatalog);
+        stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
+      }
+      stageCapacities = Csv.stageCapacities(stageCatalog);
+      dependencies = dependenciesForCurrentCatalog(true);
+      saveCsv(STORAGE_KEYS.stageCatalog, file.name, Csv.serializeStageTeamCapacities(stageCatalog));
+      csvSources.stageCatalog = file.name;
+      warnUnconfiguredStages(input);
       recalculate();
     } catch (error) {
       console.error(error);
@@ -535,23 +618,10 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       const text = await file.text();
-      dependencies = Csv.parseDependencies(text);
+      dependencies = Csv.parseDependencies(text, stageCatalog);
+      dependenciesText = { name: file.name, text };
       saveCsv(STORAGE_KEYS.dependencies, file.name, text);
       csvSources.dependencies = file.name;
-      recalculate();
-    } catch (error) {
-      console.error(error);
-      alert(error.message);
-    }
-  });
-  document.getElementById('stageCapacityCsvFile').addEventListener('change', async event => {
-    try {
-      const file = event.target.files && event.target.files[0];
-      if (!file) return;
-      const text = await file.text();
-      stageCapacities = Csv.parseStageCapacities(text);
-      saveCsv(STORAGE_KEYS.stageCapacities, file.name, text);
-      csvSources.stageCapacities = file.name;
       recalculate();
     } catch (error) {
       console.error(error);

@@ -114,9 +114,7 @@
     );
     validateDependencies(stageIds, activeDependencies);
     for (const stageId of stageIds) {
-      const tasksForStage = inputTasks.filter(task => task.stageId === stageId);
-      const isUnknown = tasksForStage.every(task => task.isUnknown);
-      const maxParallelPeople = isUnknown ? 1 : stageCapacities && stageCapacities[stageId];
+      const maxParallelPeople = stageCapacities && stageCapacities[stageId];
       if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
         throw new Error(`Некорректный Max Parallel People: ${stageId}`);
       }
@@ -133,7 +131,7 @@
         locationOrder: location.order,
         priority: normalizePriority(location.priority),
         stageOrder: stageOrder.get(task.stageId),
-        maxParallelPeople: task.isUnknown ? 1 : stageCapacities[task.stageId],
+        maxParallelPeople: stageCapacities[task.stageId],
         remaining: task.estimate,
         allocation: [],
         completeIndex: task.estimate <= EPSILON ? -1 : null,

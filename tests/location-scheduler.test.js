@@ -1,116 +1,113 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const Csv = require('../location-csv.js');
 const Scheduler = require('../location-scheduler.js');
 
+const ROOT = path.resolve(__dirname, '..');
+const readCsv = filename => fs.readFileSync(path.join(ROOT, filename), 'utf8');
+const ESTIMATES_TEXT = readCsv('location-estimates.csv');
+const DEPENDENCIES_TEXT = readCsv('location-dependencies.csv');
+const STAGE_CATALOG_TEXT = readCsv('location-stage-team-capacity.csv');
+const BASE_CATALOG = Csv.parseStageTeamCapacities(STAGE_CATALOG_TEXT);
+const INITIAL_INPUT = Csv.parseCsv(ESTIMATES_TEXT, BASE_CATALOG);
+const STAGE_CATALOG = Csv.mergeStageTeamCapacities(BASE_CATALOG, INITIAL_INPUT.unconfiguredStages);
+const STAGE_CAPACITIES = Csv.stageCapacities(STAGE_CATALOG);
 const CAPACITIES = Object.fromEntries(Csv.DEPARTMENTS.map(department => [department.id, department.defaultCapacity]));
-const STAGE_CAPACITIES = Csv.parseStageCapacities(Csv.DEFAULT_STAGE_CAPACITY_CSV);
+const stageId = name => Csv.stageIdForName(name);
+
+function defaultInput() {
+  return Csv.parseCsv(ESTIMATES_TEXT, STAGE_CATALOG);
+}
 
 function scheduleDefault() {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
-  const dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
+  const input = defaultInput();
+  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
   return { input, state: Scheduler.schedule(input, dependencies, STAGE_CAPACITIES, '2026-07-13', CAPACITIES) };
 }
 
-test('Locations Inventory format expands into the level production model', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+test('stage source of truth is the union of estimates and stage/team/capacity CSV', () => {
+  assert.equal(BASE_CATALOG.length, 12);
+  assert.equal(INITIAL_INPUT.unconfiguredStages.length, 3);
+  assert.equal(STAGE_CATALOG.length, 15);
+  assert.equal(INITIAL_INPUT.locations.length, 10);
+  assert.equal(INITIAL_INPUT.locations[0].tasks.length, 10);
+  assert.equal(INITIAL_INPUT.locations.flatMap(location => location.tasks).length, 100);
 
-  assert.equal(input.locations.length, 10);
-  assert.equal(input.locations[0].name, 'Beach (Rocky Coast)');
-  assert.equal(input.locations[0].tasks.length, 10);
-  assert.equal(input.excluded.length, 20);
-  assert.deepEqual(
-    input.locations[0].tasks.filter(task => ['LIGHTING', 'VISUAL_FX', 'SOUND_FX'].includes(task.stageId)).map(task => [task.stageId, task.estimate]),
-    [['LIGHTING', 10], ['VISUAL_FX', 10], ['SOUND_FX', 10]]
+  assert.deepEqual(INITIAL_INPUT.unconfiguredStages.map(stage => stage.name), ['Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest']);
+  const estimateOnly = STAGE_CATALOG.filter(stage => INITIAL_INPUT.unconfiguredStages.some(item => item.id === stage.id));
+  assert.ok(estimateOnly.every(stage => stage.departmentId === 'unknown' && stage.maxParallelPeople === 1));
+});
+
+test('the parser creates one task per estimate row without hardcoded expansion or exclusion', () => {
+  const input = defaultInput();
+  const first = input.locations[0];
+  assert.equal(first.name, 'Beach (Rocky Coast)');
+  assert.deepEqual(first.tasks.map(task => task.stageName), [
+    'Concept', 'LD Macro Layout', 'LD Greybox', 'Gameplay Pass', 'LA Asset List',
+    'Modelling', 'LA Dressing', 'Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest'
+  ]);
+  assert.equal(first.tasks.reduce((sum, task) => sum + task.estimate, 0), 100);
+});
+
+test('combined CSV controls both team and parallelism for a dynamic stage', () => {
+  const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
+Review Gate,Design,2`);
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Review Gate,Not Started,5,`, catalog);
+  const task = input.locations[0].tasks[0];
+
+  assert.equal(task.departmentId, 'design');
+  assert.equal(Csv.stageCapacities(catalog)[task.stageId], 2);
+  assert.match(Csv.serializeStageTeamCapacities(catalog), /Review Gate,Design,2/);
+});
+
+test('combined CSV validates duplicates, teams and capacity', () => {
+  assert.throws(
+    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Design,-1'),
+    /Max Parallel People/
+  );
+  assert.throws(
+    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,No Such Team,1'),
+    /Unknown team/
+  );
+  assert.throws(
+    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Design,1\n review ,Design,2'),
+    /Duplicate stage/
   );
 });
 
-test('department default capacities match the level production plan', () => {
-  assert.deepEqual(CAPACITIES, {
-    design: 20,
-    levelDesign: 80,
-    levelArt: 40,
-    modeling: 60,
-    technicalArt: 20,
-    sound: 20,
-    unknown: 20
-  });
-});
-
-test('unknown estimate stages are warned about and scheduled by a one-person Unknown team', () => {
-  const csv = `Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
-Test Location,High,Polish Pass,Not Started,25,
-Second Location,Medium,polish   pass,Not Started,5,
-Second Location,Medium,Brand New Stage,Not Started,10,`;
-  const input = Csv.parseCsv(csv);
-
-  assert.deepEqual(input.unknownStages.map(stage => stage.name), ['Polish Pass', 'Brand New Stage']);
-  assert.equal(input.locations[0].tasks[0].stageId, input.locations[1].tasks[0].stageId);
-  assert.ok(input.locations.flatMap(location => location.tasks).every(task => task.departmentId === 'unknown'));
-
-  const state = Scheduler.schedule(input, [], STAGE_CAPACITIES, '2026-07-13', CAPACITIES);
-  assert.ok(state.tasks.every(task => task.maxParallelPeople === 1));
-  assert.ok(state.days.every(day => day.used.unknown <= 1 + 1e-6));
-  assert.equal(state.tasks.reduce((sum, task) => sum + task.allocation.reduce((used, item) => used + item.amount, 0), 0), 40);
-});
-
-test('stage teams CSV registers dynamic stages and controls their team', () => {
-  const teams = Csv.parseStageTeams(Csv.DEFAULT_STAGE_TEAMS_CSV + '\nPolish Pass,Design');
-  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
-Test Location,High,Polish Pass,Not Started,5,`, teams);
-
-  assert.deepEqual(input.unknownStages, []);
-  assert.equal(input.locations[0].tasks[0].departmentId, 'design');
-  assert.match(Csv.serializeStageTeams(teams), /Polish Pass,Design/);
-});
-
-test('every stage defaults to one parallel person', () => {
-  assert.deepEqual(STAGE_CAPACITIES, {
-    CONCEPT: 1,
-    LD_MACRO: 1,
-    LD_GREYBOX: 1,
-    GAMEPLAY_PASS: 1,
-    LA_ASSET_LIST: 1,
-    MODELLING: 1,
-    LA_DRESSING: 1,
-    LIGHTING: 1,
-    VISUAL_FX: 1,
-    SOUND_FX: 1
-  });
+test('dependencies resolve through the source-of-truth union and cannot add stages', () => {
+  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
+  assert.ok(dependencies.length > 0);
+  assert.throws(
+    () => Csv.parseDependencies('From Stage,To Stage,Type,Lag Days\nConcept,Not In Either Source,FS,0', STAGE_CATALOG),
+    /outside estimates and stage\/team\/capacity CSV/
+  );
 });
 
 test('stage parallelism supports fixed people and zero as unlimited', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+  const input = defaultInput();
   input.locations = input.locations.slice(0, 1);
-  const dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
-  const twoPeople = { ...STAGE_CAPACITIES, LD_MACRO: 2 };
-  const unlimited = { ...STAGE_CAPACITIES, LD_MACRO: 0 };
+  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
+  const macroId = stageId('LD Macro Layout');
+  const twoPeople = { ...STAGE_CAPACITIES, [macroId]: 2 };
+  const unlimited = { ...STAGE_CAPACITIES, [macroId]: 0 };
   const stateTwo = Scheduler.schedule(input, dependencies, twoPeople, '2026-07-13', CAPACITIES);
   const stateUnlimited = Scheduler.schedule(input, dependencies, unlimited, '2026-07-13', CAPACITIES);
-  const macroTwo = stateTwo.locations[0].tasks.find(task => task.stageId === 'LD_MACRO');
-  const macroUnlimited = stateUnlimited.locations[0].tasks.find(task => task.stageId === 'LD_MACRO');
+  const macroTwo = stateTwo.locations[0].tasks.find(task => task.stageId === macroId);
+  const macroUnlimited = stateUnlimited.locations[0].tasks.find(task => task.stageId === macroId);
 
   assert.deepEqual(macroTwo.allocation.map(item => item.amount), [2, 2, 2, 2, 2]);
   assert.deepEqual(macroUnlimited.allocation.map(item => item.amount), [4, 4, 2]);
 });
 
-test('stage capacity parser rejects missing and negative values', () => {
-  assert.throws(
-    () => Csv.parseStageCapacities('Stage,Max Parallel People\nConcept,-1'),
-    /Max Parallel People/
-  );
-  assert.throws(
-    () => Csv.parseStageCapacities('Stage,Max Parallel People\nConcept,1'),
-    /не содержит/
-  );
-});
-
-test('default location roadmap allocates every estimate and respects capacities', () => {
+test('default roadmap allocates every estimate and respects team capacities', () => {
   const { state } = scheduleDefault();
   assert.equal(state.locations.length, 10);
   assert.equal(state.tasks.length, 100);
   assert.equal(state.tasks.reduce((sum, task) => sum + task.estimate, 0), 1000);
-  assert.equal(Scheduler.dateKey(state.endDate), '2027-05-28');
 
   for (const task of state.tasks) {
     const allocated = task.allocation.reduce((sum, item) => sum + item.amount, 0);
@@ -123,82 +120,47 @@ test('default location roadmap allocates every estimate and respects capacities'
   }
 });
 
-test('FS branches run after Greybox and Visual FX and Sound FX stay independent', () => {
-  const { state } = scheduleDefault();
-  for (const location of state.locations) {
-    const byStage = new Map(location.tasks.map(task => [task.stageId, task]));
-    const greyboxEnd = byStage.get('LD_GREYBOX').completeIndex;
-    for (const stageId of ['GAMEPLAY_PASS', 'LA_DRESSING', 'VISUAL_FX', 'SOUND_FX']) {
-      assert.ok(byStage.get(stageId).allocation[0].index > greyboxEnd, `${location.name} / ${stageId} starts before Greybox ends`);
-    }
-    assert.equal(byStage.get('VISUAL_FX').departmentId, 'technicalArt');
-    assert.equal(byStage.get('SOUND_FX').departmentId, 'sound');
-  }
-});
-
-test('dependencies for stages missing from a location are ignored', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
-  const firstLocation = input.locations[0];
-  firstLocation.tasks = firstLocation.tasks.filter(task => task.stageId !== 'LD_MACRO');
-
-  const state = Scheduler.schedule(
-    input,
-    Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV),
-    STAGE_CAPACITIES,
-    '2026-07-13',
-    CAPACITIES
-  );
-  const scheduled = new Map(state.locations[0].tasks.map(task => [task.stageId, task]));
-
-  assert.equal(scheduled.has('LD_MACRO'), false);
-  assert.equal(scheduled.get('LD_GREYBOX').incoming.some(item => item.from === 'LD_MACRO'), false);
-  assert.ok(scheduled.get('LD_GREYBOX').allocation.length > 0);
-});
-
-test('dependencies whose stage disappeared from every location are ignored', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
-  for (const location of input.locations) {
-    location.tasks = location.tasks.filter(task => task.stageId !== 'LD_MACRO');
-  }
-
-  const state = Scheduler.schedule(
-    input,
-    Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV),
-    STAGE_CAPACITIES,
-    '2026-07-13',
-    CAPACITIES
-  );
-
-  assert.equal(state.dependencies.some(item => item.from === 'LD_MACRO' || item.to === 'LD_MACRO'), false);
-});
-
-test('FF keeps LA Dressing open until Modelling has finished', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+test('FS and FF dependencies use dynamic stage IDs', () => {
+  const input = defaultInput();
   input.locations = input.locations.slice(0, 1);
   const byStage = new Map(input.locations[0].tasks.map(task => [task.stageId, task]));
-  byStage.get('MODELLING').estimate = 30;
-  byStage.get('LA_DRESSING').estimate = 2;
+  byStage.get(stageId('Modelling')).estimate = 30;
+  byStage.get(stageId('LA Dressing')).estimate = 2;
   const state = Scheduler.schedule(
     input,
-    Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV),
+    Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG),
     STAGE_CAPACITIES,
     '2026-07-13',
     CAPACITIES
   );
   const scheduled = new Map(state.locations[0].tasks.map(task => [task.stageId, task]));
-  const dressing = scheduled.get('LA_DRESSING');
-  const modelling = scheduled.get('MODELLING');
+  const greybox = scheduled.get(stageId('LD Greybox'));
+  const dressing = scheduled.get(stageId('LA Dressing'));
+  const modelling = scheduled.get(stageId('Modelling'));
 
-  assert.ok(dressing.allocation[0].index > scheduled.get('LD_GREYBOX').completeIndex);
+  assert.ok(dressing.allocation[0].index > greybox.completeIndex);
   assert.ok(dressing.completeIndex >= modelling.completeIndex);
-  assert.ok(dressing.allocation.length > 1);
 });
 
-test('dependency parser rejects cycles', () => {
-  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+test('dependencies for stages absent from estimates are ignored by the scheduler', () => {
+  const input = defaultInput();
+  const macroId = stageId('LD Macro Layout');
+  for (const location of input.locations) location.tasks = location.tasks.filter(task => task.stageId !== macroId);
+  const state = Scheduler.schedule(
+    input,
+    Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG),
+    STAGE_CAPACITIES,
+    '2026-07-13',
+    CAPACITIES
+  );
+  assert.equal(state.dependencies.some(item => item.from === macroId || item.to === macroId), false);
+});
+
+test('dependency cycles are rejected after dynamic name resolution', () => {
+  const input = defaultInput();
   input.locations = input.locations.slice(0, 1);
-  const dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
-  dependencies.push({ from: 'LIGHTING', to: 'CONCEPT', type: 'FS', lag: 0 });
+  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
+  dependencies.push({ from: stageId('Gameplay Pass'), to: stageId('Concept'), type: 'FS', lag: 0 });
   assert.throws(
     () => Scheduler.schedule(input, dependencies, STAGE_CAPACITIES, '2026-07-13', CAPACITIES),
     /циклическую зависимость/

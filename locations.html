@@ -30,12 +30,10 @@
     </div>
     <div class="csv-inputs" aria-hidden="true">
       <input id="dependenciesCsvFile" type="file" accept=".csv,text/csv">
-      <input id="stageCapacityCsvFile" type="file" accept=".csv,text/csv">
-      <input id="stageTeamsCsvFile" type="file" accept=".csv,text/csv">
+      <input id="stageTeamCapacityCsvFile" type="file" accept=".csv,text/csv">
     </div>
     <div class="csv-download-proxies" aria-hidden="true">
-      <a id="stageTeamsExportButton" href="location-stage-teams.csv" download></a>
-      <a href="location-stage-capacity.csv" download></a>
+      <a id="stageTeamCapacityExportButton" href="location-stage-team-capacity.csv" download></a>
     </div>
   </header>
 
@@ -50,21 +48,20 @@
   <section class="section">
     <div class="section-head">
       <h2>Capacity по двухнедельным спринтам</h2>
-      <div class="hint">Месячная мощность пересчитывается из 20 рабочих дней; один этап получает максимум 1 mday в день</div>
+      <div class="hint">Месячная мощность пересчитывается из 20 рабочих дней; параллелизм каждого этапа задаётся во внешнем CSV</div>
     </div>
     <div class="capacity-grid" id="locationCapacity"></div>
   </section>
   <details>
     <summary>Правила location scheduling engine</summary>
     <div class="algo">
-      1. Concept запускает Design Pass и Asset Pass одной локации.<br>
-      2. После LD Greybox параллельно открываются Gameplay Pass, LA Dressing, Visual FX и Sound FX.<br>
-      3. LA Dressing может начаться после LD Greybox, но по FF-правилу не заканчивается раньше Modelling.<br>
-      4. Lighting начинается после LA Dressing. Gameplay Balancing и QA / Playtest пока считаются milestone-работами и не входят в расчёт.<br>
-      5. Approved и Work In Progress отображаются как статусы, но оценки включаются целиком: это полный production plan, а не remaining-work forecast.<br>
-      6. Max Parallel People ограничивает число людей на одном этапе: 1 — один человек, 2/3 — два/три, 0 — весь доступный capacity отдела.<br>
-      7. Загруженные CSV сохраняются в браузере и автоматически восстанавливаются после обновления страницы.<br>
-      8. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
+      1. Список этапов строится только как объединение stages из estimates CSV и stage/team/capacity CSV.<br>
+      2. Stage/team/capacity CSV назначает каждому этапу команду и Max Parallel People; 0 означает весь доступный capacity команды.<br>
+      3. Этап из estimates без строки в stage/team/capacity CSV получает Unknown team и 1 parallel person и добавляется в экспортируемый каталог.<br>
+      4. Dependencies CSV может только связывать этапы из этого объединённого списка и не является источником новых этапов.<br>
+      5. Approved и Work In Progress отображаются как статусы, но оценки включаются в production plan целиком.<br>
+      6. Загруженные CSV сохраняются в браузере и автоматически восстанавливаются после обновления страницы.<br>
+      7. При конкуренции за одну команду выше стоит локация, расположенная раньше в estimates CSV.
     </div>
   </details>
   <div class="bottom"><button class="btn2" id="resetSavedCsvButton">Сбросить сохранённые CSV</button><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
