@@ -6,6 +6,7 @@
   const LEFT = 430;
   const TIMELINE_GUTTER = 18;
   const MIN_DAY_WIDTH = 3.65;
+  const SPRINT_NUMBER_BASE = new Date(2025, 10, 17, 12);
   const ROW_HEADER = 36;
   const LANE_HEIGHT = 22;
   const DEPENDENCY_NODE_WIDTH = 142;
@@ -195,13 +196,14 @@
   function sprintBlocks() {
     const totalDays = Scheduler.daysBetween(state.startDate, Scheduler.addDays(state.endDate, 1));
     const count = Math.ceil(totalDays / 14);
+    const firstSprintNumber = Math.floor(Scheduler.daysBetween(SPRINT_NUMBER_BASE, state.startDate) / 14) + 1;
     return Array.from({ length: count }, (_, index) => {
       const start = Scheduler.addDays(state.startDate, index * 14);
       const end = Scheduler.addDays(start, 13);
       return {
         index,
-        key: `S${index + 1}`,
-        label: `Sprint ${index + 1}`,
+        key: `S${firstSprintNumber + index}`,
+        label: `Sprint ${firstSprintNumber + index}`,
         start,
         end: end > state.endDate ? state.endDate : end,
         left: index * 14,

@@ -22,6 +22,7 @@
   const WORKDAYS_PER_MONTH = 20;
   const WORKDAYS_PER_SPRINT = 10;
   const CALENDAR_DAYS_PER_SPRINT = 14;
+  const SPRINT_NUMBER_BASE = '2025-11-17';
   const DEFAULTS = Object.freeze({
     roadmapStart: '2026-07-13',
     gdAvailabilityMonth: '2026-07',
@@ -82,6 +83,7 @@
     const end = new Date(startDate.getFullYear() + horizonYears, startDate.getMonth(), startDate.getDate(), 12);
     const days = [];
     const cursor = new Date(startDate);
+    const sprintNumberOffset = Math.floor(daysBetween(parseDate(SPRINT_NUMBER_BASE), startDate) / CALENDAR_DAYS_PER_SPRINT);
     const daily = {
       design: capacities.design / WORKDAYS_PER_MONTH,
       dev: capacities.dev / WORKDAYS_PER_MONTH,
@@ -95,7 +97,7 @@
         days.push({
           date: new Date(cursor),
           sprintIndex,
-          sprint: sprintKey(sprintIndex),
+          sprint: sprintKey(sprintIndex + sprintNumberOffset),
           designCap: daily.design,
           devCap: daily.dev,
           animCap: daily.anim,

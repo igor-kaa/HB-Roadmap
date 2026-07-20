@@ -6,7 +6,7 @@
   const MIN_DAY_WIDTH = 3.65;
   const LEFT = 410;
   const TIMELINE_GUTTER = 18;
-  const SPRINT_DISPLAY_START = 18;
+  const SPRINT_NUMBER_BASE = new Date(2025, 10, 17, 12);
   let rawFeatures = Csv.parseCsv(Csv.DEFAULT_CSV);
   let state = null;
   let selected = null;
@@ -57,14 +57,15 @@
   function sprintBlocks() {
     const totalDays = S.daysBetween(state.startDate, S.addDays(state.endDate, 1));
     const count = Math.ceil(totalDays / 14);
+    const firstSprintNumber = Math.floor(S.daysBetween(SPRINT_NUMBER_BASE, state.startDate) / 14) + 1;
     const output = [];
     for (let index = 0; index < count; index++) {
       const start = S.addDays(state.startDate, index * 14);
       const end = S.addDays(start, 13);
       output.push({
         index,
-        key: `S${index + 1}`,
-        label: `Sprint ${index + SPRINT_DISPLAY_START}`,
+        key: `S${firstSprintNumber + index}`,
+        label: `Sprint ${firstSprintNumber + index}`,
         start,
         end: end > state.endDate ? state.endDate : end,
         left: index * 14,

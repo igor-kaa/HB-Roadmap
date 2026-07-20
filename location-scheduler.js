@@ -8,6 +8,7 @@
   const WORKDAYS_PER_MONTH = 20;
   const WORKDAYS_PER_SPRINT = 10;
   const CALENDAR_DAYS_PER_SPRINT = 14;
+  const SPRINT_NUMBER_BASE = '2025-11-17';
   const EPSILON = 1e-8;
   const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
@@ -49,13 +50,14 @@
     );
     const days = [];
     const cursor = new Date(startDate);
+    const sprintNumberOffset = Math.floor(daysBetween(parseDate(SPRINT_NUMBER_BASE), startDate) / CALENDAR_DAYS_PER_SPRINT);
     while (cursor < end) {
       if (cursor.getDay() !== 0 && cursor.getDay() !== 6) {
         const sprintIndex = sprintIndexForDate(startDate, cursor);
         days.push({
           date: new Date(cursor),
           sprintIndex,
-          sprint: `S${sprintIndex + 1}`,
+          sprint: `S${sprintIndex + sprintNumberOffset + 1}`,
           capacities: { ...dailyCapacities },
           used: Object.fromEntries(Object.keys(capacities).map(key => [key, 0])),
           allocations: []
