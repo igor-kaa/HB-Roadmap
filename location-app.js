@@ -8,11 +8,79 @@
   const MIN_DAY_WIDTH = 3.65;
   const ROW_HEADER = 36;
   const LANE_HEIGHT = 22;
-  let input = Csv.parseCsv(Csv.DEFAULT_CSV);
-  let dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
-  let stageCapacities = Csv.parseStageCapacities(Csv.DEFAULT_STAGE_CAPACITY_CSV);
+  const STORAGE_KEYS = Object.freeze({
+    estimates: 'hyperborea.locations.estimates.v1',
+    dependencies: 'hyperborea.locations.dependencies.v1',
+    stageCapacities: 'hyperborea.locations.stage-capacities.v1'
+  });
+  const browserStorage = getBrowserStorage();
+  const restoredInput = restoreCsv(STORAGE_KEYS.estimates, Csv.parseCsv, Csv.DEFAULT_CSV, 'Built-in estimates');
+  const restoredDependencies = restoreCsv(STORAGE_KEYS.dependencies, Csv.parseDependencies, Csv.DEFAULT_DEPENDENCIES_CSV, 'Built-in dependencies');
+  const restoredStageCapacities = restoreCsv(STORAGE_KEYS.stageCapacities, Csv.parseStageCapacities, Csv.DEFAULT_STAGE_CAPACITY_CSV, 'Built-in parallelism');
+  let input = restoredInput.value;
+  let dependencies = restoredDependencies.value;
+  let stageCapacities = restoredStageCapacities.value;
+  let csvSources = {
+    estimates: restoredInput.name,
+    dependencies: restoredDependencies.name,
+    stageCapacities: restoredStageCapacities.name
+  };
   let state = null;
   let selected = null;
+
+  function getBrowserStorage() {
+    try {
+      return typeof localStorage === 'undefined' ? null : localStorage;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function restoreCsv(key, parser, defaultText, defaultName) {
+    if (browserStorage) {
+      try {
+        const savedText = browserStorage.getItem(key);
+        if (savedText) {
+          const saved = JSON.parse(savedText);
+          if (saved && typeof saved.text === 'string') {
+            return { value: parser(saved.text), name: saved.name || 'Saved CSV' };
+          }
+        }
+      } catch (error) {
+        try { browserStorage.removeItem(key); } catch (storageError) { /* storage unavailable */ }
+        console.warn(`Saved CSV ignored: ${key}`, error);
+      }
+    }
+    return { value: parser(defaultText), name: defaultName };
+  }
+
+  function saveCsv(key, name, text) {
+    if (!browserStorage) return false;
+    try {
+      browserStorage.setItem(key, JSON.stringify({ name, text }));
+      return true;
+    } catch (error) {
+      console.warn(`CSV could not be saved: ${key}`, error);
+      return false;
+    }
+  }
+
+  function resetSavedCsv() {
+    if (browserStorage) {
+      for (const key of Object.values(STORAGE_KEYS)) {
+        try { browserStorage.removeItem(key); } catch (error) { /* storage unavailable */ }
+      }
+    }
+    input = Csv.parseCsv(Csv.DEFAULT_CSV);
+    dependencies = Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV);
+    stageCapacities = Csv.parseStageCapacities(Csv.DEFAULT_STAGE_CAPACITY_CSV);
+    csvSources = {
+      estimates: 'Built-in estimates',
+      dependencies: 'Built-in dependencies',
+      stageCapacities: 'Built-in parallelism'
+    };
+    recalculate();
+  }
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -101,7 +169,7 @@
       ['Окончание production', fmt(state.endDate), `${sprints} спринтов`],
       ['Dependencies', state.dependencies.length, `${ffCount} Finish-to-Finish`],
       ['Milestone-работы', input.excluded.length, 'пока исключены из расчёта'],
-      ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', 'people / stage · 0 = unlimited']
+      ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', `0 = unlimited · ${csvSources.stageCapacities}`]
     ];
     document.getElementById('locationSummary').innerHTML = cards.map(card =>
       `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`
@@ -247,6 +315,7 @@
   document.getElementById('locationRecalcButton').addEventListener('click', recalculate);
   document.getElementById('locationSearch').addEventListener('input', renderGantt);
   document.getElementById('locationExportButton').addEventListener('click', exportCsv);
+  document.getElementById('resetSavedCsvButton').addEventListener('click', resetSavedCsv);
   document.getElementById('locationCloseDrawerButton').addEventListener('click', () => {
     selected = null;
     document.getElementById('locationDrawer').classList.remove('open');
@@ -256,7 +325,10 @@
     try {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-      input = Csv.parseCsv(await file.text());
+      const text = await file.text();
+      input = Csv.parseCsv(text);
+      saveCsv(STORAGE_KEYS.estimates, file.name, text);
+      csvSources.estimates = file.name;
       recalculate();
     } catch (error) {
       console.error(error);
@@ -267,7 +339,10 @@
     try {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-      dependencies = Csv.parseDependencies(await file.text());
+      const text = await file.text();
+      dependencies = Csv.parseDependencies(text);
+      saveCsv(STORAGE_KEYS.dependencies, file.name, text);
+      csvSources.dependencies = file.name;
       recalculate();
     } catch (error) {
       console.error(error);
@@ -278,7 +353,10 @@
     try {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-      stageCapacities = Csv.parseStageCapacities(await file.text());
+      const text = await file.text();
+      stageCapacities = Csv.parseStageCapacities(text);
+      saveCsv(STORAGE_KEYS.stageCapacities, file.name, text);
+      csvSources.stageCapacities = file.name;
       recalculate();
     } catch (error) {
       console.error(error);

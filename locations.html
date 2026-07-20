@@ -28,6 +28,7 @@
         <label class="file-label">CSV с dependencies<input id="dependenciesCsvFile" type="file" accept=".csv,text/csv"></label>
         <label class="file-label">CSV parallel people<input id="stageCapacityCsvFile" type="file" accept=".csv,text/csv"></label>
         <button class="btn" id="locationRecalcButton">Пересчитать</button>
+        <button class="btn2" id="resetSavedCsvButton">Сбросить сохранённые CSV</button>
       </div>
     </div>
   </header>
@@ -56,7 +57,8 @@
       4. Lighting начинается после LA Dressing. Gameplay Balancing и QA / Playtest пока считаются milestone-работами и не входят в расчёт.<br>
       5. Approved и Work In Progress отображаются как статусы, но оценки включаются целиком: это полный production plan, а не remaining-work forecast.<br>
       6. Max Parallel People ограничивает число людей на одном этапе: 1 — один человек, 2/3 — два/три, 0 — весь доступный capacity отдела.<br>
-      7. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
+      7. Загруженные CSV сохраняются в браузере и автоматически восстанавливаются после обновления страницы.<br>
+      8. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
     </div>
   </details>
   <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><a class="file-label" href="location-stage-capacity.csv" download>Скачать parallel people CSV</a><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
