@@ -1,11 +1,11 @@
-From Stage ID,To Stage ID,Type,Lag Days
-CONCEPT,LD_MACRO,FS,0
-LD_MACRO,LD_GREYBOX,FS,0
-LD_GREYBOX,GAMEPLAY_PASS,FS,0
-CONCEPT,LA_ASSET_LIST,FS,0
-LA_ASSET_LIST,MODELLING,FS,0
-LD_GREYBOX,LA_DRESSING,FS,0
-MODELLING,LA_DRESSING,FF,0
-LA_DRESSING,LIGHTING,FS,0
-LD_GREYBOX,VISUAL_FX,FS,0
-LD_GREYBOX,SOUND_FX,FS,0
+From Stage,To Stage,Type,Lag Days
+Concept,LD Macro Layout,FS,0
+LD Macro Layout,LD Greybox,FS,0
+LD Greybox,Gameplay Pass,FS,0
+Concept,LA Asset List,FS,0
+LA Asset List,Modelling,FS,0
+LD Greybox,LA Dressing,FS,0
+Modelling,LA Dressing,FF,0
+LA Dressing,Lighting,FS,0
+LD Greybox,Visual FX,FS,0
+LD Greybox,Sound FX,FS,0
