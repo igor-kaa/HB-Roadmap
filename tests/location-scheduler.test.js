@@ -96,11 +96,11 @@ test('stage parallelism supports fixed people and zero as unlimited', () => {
 
 test('stage capacity parser rejects missing and negative values', () => {
   assert.throws(
-    () => Csv.parseStageCapacities('Stage ID,Max Parallel People\nCONCEPT,-1'),
+    () => Csv.parseStageCapacities('Stage,Max Parallel People\nConcept,-1'),
     /Max Parallel People/
   );
   assert.throws(
-    () => Csv.parseStageCapacities('Stage ID,Max Parallel People\nCONCEPT,1'),
+    () => Csv.parseStageCapacities('Stage,Max Parallel People\nConcept,1'),
     /не содержит/
   );
 });

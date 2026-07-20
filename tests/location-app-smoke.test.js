@@ -72,7 +72,7 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
   assert.match(element('locationGantt').innerHTML, /Beach \(Rocky Coast\)/);
   assert.match(element('locationGantt').innerHTML, /Sound FX/);
 
-  const customParallelism = Csv.DEFAULT_STAGE_CAPACITY_CSV.replace('LD_MACRO,1', 'LD_MACRO,0');
+  const customParallelism = Csv.DEFAULT_STAGE_CAPACITY_CSV.replace('LD Macro Layout,1', 'LD Macro Layout,0');
   await element('stageCapacityCsvFile').listeners.change({
     target: { files: [{ name: 'custom-parallelism.csv', text: async () => customParallelism }] }
   });

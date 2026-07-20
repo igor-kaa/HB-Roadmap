@@ -6,8 +6,8 @@
   'use strict';
 
   const REQUIRED_COLUMNS = ['Location & Filler Space', 'Priority', 'Stage', 'Status', 'Est. Days', 'Notes'];
-  const DEPENDENCY_COLUMNS = ['From Stage ID', 'To Stage ID', 'Type', 'Lag Days'];
-  const STAGE_CAPACITY_COLUMNS = ['Stage ID', 'Max Parallel People'];
+  const DEPENDENCY_COLUMNS = ['From Stage', 'To Stage', 'Type', 'Lag Days'];
+  const STAGE_CAPACITY_COLUMNS = ['Stage', 'Max Parallel People'];
   const STAGE_TEAM_COLUMNS = ['Stage', 'Team'];
   const DEPARTMENTS = Object.freeze([
     { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
@@ -85,6 +85,12 @@
 
   function normalizeStageName(value) {
     return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function stageIdForName(value) {
+    const normalized = normalizeStageName(value);
+    const stage = Object.values(STAGES).find(item => normalizeStageName(item.name) === normalized);
+    return stage ? stage.id : null;
   }
 
   function stagesForSourceName(value) {
@@ -247,11 +253,13 @@
     const dependencies = rows
       .filter(row => row.some(value => String(value || '').trim()))
       .map(row => {
-        const from = String(row[index('From Stage ID')] || '').trim().toUpperCase();
-        const to = String(row[index('To Stage ID')] || '').trim().toUpperCase();
+        const fromName = String(row[index('From Stage')] || '').trim();
+        const toName = String(row[index('To Stage')] || '').trim();
+        const from = stageIdForName(fromName);
+        const to = stageIdForName(toName);
         const type = String(row[index('Type')] || 'FS').trim().toUpperCase();
         const lag = Number(String(row[index('Lag Days')] || '0').trim());
-        if (!STAGES[from] || !STAGES[to]) throw new Error(`Неизвестный Stage ID в dependency: ${from} → ${to}`);
+        if (!from || !to) throw new Error(`Неизвестная стадия в dependency: ${fromName} → ${toName}`);
         if (!['FS', 'FF'].includes(type)) throw new Error(`Поддерживаются только FS и FF: ${from} → ${to}`);
         if (!Number.isInteger(lag) || lag < 0) throw new Error(`Lag Days должен быть целым числом ≥ 0: ${from} → ${to}`);
         return { from, to, type, lag };
@@ -265,10 +273,11 @@
     const { index } = columnReader(rows, STAGE_CAPACITY_COLUMNS);
     const capacities = {};
     for (const row of rows.filter(row => row.some(value => String(value || '').trim()))) {
-      const stageId = String(row[index('Stage ID')] || '').trim().toUpperCase();
+      const stageName = String(row[index('Stage')] || '').trim();
+      const stageId = stageIdForName(stageName);
       const maxParallelPeople = Number(String(row[index('Max Parallel People')] || '').trim());
-      if (!STAGES[stageId]) throw new Error(`Неизвестный Stage ID в stage capacity: ${stageId}`);
-      if (Object.prototype.hasOwnProperty.call(capacities, stageId)) throw new Error(`Повтор Stage ID в stage capacity: ${stageId}`);
+      if (!stageId) throw new Error(`Неизвестная стадия в stage capacity: ${stageName}`);
+      if (Object.prototype.hasOwnProperty.call(capacities, stageId)) throw new Error(`Повтор стадии в stage capacity: ${stageName}`);
       if (!Number.isInteger(maxParallelPeople) || maxParallelPeople < 0) {
         throw new Error(`Max Parallel People должен быть целым числом ≥ 0: ${stageId}`);
       }
@@ -319,29 +328,29 @@
     return lines.join('\n');
   }
 
-  const DEFAULT_DEPENDENCIES_CSV = `From Stage ID,To Stage ID,Type,Lag Days
-CONCEPT,LD_MACRO,FS,0
-LD_MACRO,LD_GREYBOX,FS,0
-LD_GREYBOX,GAMEPLAY_PASS,FS,0
-CONCEPT,LA_ASSET_LIST,FS,0
-LA_ASSET_LIST,MODELLING,FS,0
-LD_GREYBOX,LA_DRESSING,FS,0
-MODELLING,LA_DRESSING,FF,0
-LA_DRESSING,LIGHTING,FS,0
-LD_GREYBOX,VISUAL_FX,FS,0
-LD_GREYBOX,SOUND_FX,FS,0`;
+  const DEFAULT_DEPENDENCIES_CSV = `From Stage,To Stage,Type,Lag Days
+Concept,LD Macro Layout,FS,0
+LD Macro Layout,LD Greybox,FS,0
+LD Greybox,Gameplay Pass,FS,0
+Concept,LA Asset List,FS,0
+LA Asset List,Modelling,FS,0
+LD Greybox,LA Dressing,FS,0
+Modelling,LA Dressing,FF,0
+LA Dressing,Lighting,FS,0
+LD Greybox,Visual FX,FS,0
+LD Greybox,Sound FX,FS,0`;
 
-  const DEFAULT_STAGE_CAPACITY_CSV = `Stage ID,Max Parallel People
-CONCEPT,1
-LD_MACRO,1
-LD_GREYBOX,1
-GAMEPLAY_PASS,1
-LA_ASSET_LIST,1
-MODELLING,1
-LA_DRESSING,1
-LIGHTING,1
-VISUAL_FX,1
-SOUND_FX,1`;
+  const DEFAULT_STAGE_CAPACITY_CSV = `Stage,Max Parallel People
+Concept,1
+LD Macro Layout,1
+LD Greybox,1
+Gameplay Pass,1
+LA Asset List,1
+Modelling,1
+LA Dressing,1
+Lighting,1
+Visual FX,1
+Sound FX,1`;
 
   const DEFAULT_STAGE_TEAMS_CSV = `Stage,Team
 Concept,Design
