@@ -32,8 +32,36 @@ test('department default capacities match the level production plan', () => {
     levelArt: 40,
     modeling: 60,
     technicalArt: 20,
-    sound: 20
+    sound: 20,
+    unknown: 20
   });
+});
+
+test('unknown estimate stages are warned about and scheduled by a one-person Unknown team', () => {
+  const csv = `Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Polish Pass,Not Started,25,
+Second Location,Medium,polish   pass,Not Started,5,
+Second Location,Medium,Brand New Stage,Not Started,10,`;
+  const input = Csv.parseCsv(csv);
+
+  assert.deepEqual(input.unknownStages.map(stage => stage.name), ['Polish Pass', 'Brand New Stage']);
+  assert.equal(input.locations[0].tasks[0].stageId, input.locations[1].tasks[0].stageId);
+  assert.ok(input.locations.flatMap(location => location.tasks).every(task => task.departmentId === 'unknown'));
+
+  const state = Scheduler.schedule(input, [], STAGE_CAPACITIES, '2026-07-13', CAPACITIES);
+  assert.ok(state.tasks.every(task => task.maxParallelPeople === 1));
+  assert.ok(state.days.every(day => day.used.unknown <= 1 + 1e-6));
+  assert.equal(state.tasks.reduce((sum, task) => sum + task.allocation.reduce((used, item) => used + item.amount, 0), 0), 40);
+});
+
+test('stage teams CSV registers dynamic stages and controls their team', () => {
+  const teams = Csv.parseStageTeams(Csv.DEFAULT_STAGE_TEAMS_CSV + '\nPolish Pass,Design');
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Polish Pass,Not Started,5,`, teams);
+
+  assert.deepEqual(input.unknownStages, []);
+  assert.equal(input.locations[0].tasks[0].departmentId, 'design');
+  assert.match(Csv.serializeStageTeams(teams), /Polish Pass,Design/);
 });
 
 test('every stage defaults to one parallel person', () => {
@@ -106,6 +134,42 @@ test('FS branches run after Greybox and Visual FX and Sound FX stay independent'
     assert.equal(byStage.get('VISUAL_FX').departmentId, 'technicalArt');
     assert.equal(byStage.get('SOUND_FX').departmentId, 'sound');
   }
+});
+
+test('dependencies for stages missing from a location are ignored', () => {
+  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+  const firstLocation = input.locations[0];
+  firstLocation.tasks = firstLocation.tasks.filter(task => task.stageId !== 'LD_MACRO');
+
+  const state = Scheduler.schedule(
+    input,
+    Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV),
+    STAGE_CAPACITIES,
+    '2026-07-13',
+    CAPACITIES
+  );
+  const scheduled = new Map(state.locations[0].tasks.map(task => [task.stageId, task]));
+
+  assert.equal(scheduled.has('LD_MACRO'), false);
+  assert.equal(scheduled.get('LD_GREYBOX').incoming.some(item => item.from === 'LD_MACRO'), false);
+  assert.ok(scheduled.get('LD_GREYBOX').allocation.length > 0);
+});
+
+test('dependencies whose stage disappeared from every location are ignored', () => {
+  const input = Csv.parseCsv(Csv.DEFAULT_CSV);
+  for (const location of input.locations) {
+    location.tasks = location.tasks.filter(task => task.stageId !== 'LD_MACRO');
+  }
+
+  const state = Scheduler.schedule(
+    input,
+    Csv.parseDependencies(Csv.DEFAULT_DEPENDENCIES_CSV),
+    STAGE_CAPACITIES,
+    '2026-07-13',
+    CAPACITIES
+  );
+
+  assert.equal(state.dependencies.some(item => item.from === 'LD_MACRO' || item.to === 'LD_MACRO'), false);
 });
 
 test('FF keeps LA Dressing open until Modelling has finished', () => {

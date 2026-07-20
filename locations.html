@@ -27,6 +27,7 @@
         <label class="file-label file-label-primary">CSV с оценками<input id="locationsCsvFile" type="file" accept=".csv,text/csv"></label>
         <label class="file-label">CSV с dependencies<input id="dependenciesCsvFile" type="file" accept=".csv,text/csv"></label>
         <label class="file-label">CSV parallel people<input id="stageCapacityCsvFile" type="file" accept=".csv,text/csv"></label>
+        <label class="file-label">CSV этапы и команды<input id="stageTeamsCsvFile" type="file" accept=".csv,text/csv"></label>
         <button class="btn" id="locationRecalcButton">Пересчитать</button>
         <button class="btn2" id="resetSavedCsvButton">Сбросить сохранённые CSV</button>
       </div>
@@ -61,7 +62,7 @@
       8. При конкуренции за один департамент выше стоит локация, расположенная раньше в CSV.
     </div>
   </details>
-  <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><a class="file-label" href="location-stage-capacity.csv" download>Скачать parallel people CSV</a><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
+  <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><a class="file-label" href="location-stage-capacity.csv" download>Скачать parallel people CSV</a><button class="btn2" id="stageTeamsExportButton">Скачать этапы и команды CSV</button><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
   <aside class="drawer" id="locationDrawer"><button class="close" id="locationCloseDrawerButton">×</button><div id="locationDrawerBody"></div></aside>
 
   <script src="location-csv.js"></script>
