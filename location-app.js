@@ -8,6 +8,11 @@
   const MIN_DAY_WIDTH = 3.65;
   const ROW_HEADER = 36;
   const LANE_HEIGHT = 22;
+  const DEPENDENCY_NODE_WIDTH = 142;
+  const DEPENDENCY_NODE_HEIGHT = 76;
+  const DEPENDENCY_COLUMN_GAP = 64;
+  const DEPENDENCY_ROW_GAP = 22;
+  const DEPENDENCY_GRAPH_PADDING = 28;
   const STORAGE_KEYS = Object.freeze({
     estimates: 'hyperborea.locations.estimates.v1',
     dependencies: 'hyperborea.locations.dependencies.v1',
@@ -173,15 +178,138 @@
       ['Локации', state.locations.length, `${state.tasks.length} production-задач`],
       ['Общий объём', `${total.toFixed(0)} mdays`, 'без Gameplay Balancing и QA'],
       ['Окончание production', fmt(state.endDate), `${sprints} спринтов`],
-      ['Dependencies', state.dependencies.length, `${ffCount} Finish-to-Finish`],
       ['Milestone-работы', input.excluded.length, 'пока исключены из расчёта'],
       ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', `0 = unlimited · ${csvSources.stageCapacities}`]
     ];
-    document.getElementById('locationSummary').innerHTML = cards.map(card =>
+    const cardsHtml = cards.map(card =>
       `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`
-    ).join('') + (input.unknownStages.length
+    );
+    cardsHtml.splice(3, 0,
+      `<button class="card dependency-summary-card" id="dependencySummaryCard" type="button" aria-label="View graph of ${state.dependencies.length} dependencies"><div class="cl">Dependencies</div><div class="cv">${state.dependencies.length}</div><div class="cn">${ffCount} Finish-to-Finish <span>View graph →</span></div></button>`
+    );
+    document.getElementById('locationSummary').innerHTML = cardsHtml.join('') + (input.unknownStages.length
       ? `<div class="card error-card"><div class="cl">Неизвестные этапы</div><div class="cv">${input.unknownStages.length}</div><div class="cn">${esc(input.unknownStages.map(stage => stage.name).join(', '))} · команда Unknown, capacity 20</div></div>`
       : '');
+    document.getElementById('dependencySummaryCard').addEventListener('click', openDependencyGraph);
+  }
+
+  function dependencyStageInfo(stageId) {
+    const task = state.tasks.find(item => item.stageId === stageId);
+    const stage = Csv.STAGES[stageId];
+    if (task) return { name: task.stageName, department: task.department, departmentCss: task.departmentCss };
+    const department = stage && Csv.DEPARTMENTS.find(item => item.id === stage.departmentId);
+    return {
+      name: stage ? stage.name : stageId,
+      department: department ? department.name : 'Unknown',
+      departmentCss: department ? department.css : 'loc-unknown'
+    };
+  }
+
+  function dependencyGraphLayout(edges) {
+    const nodeIds = [...new Set(edges.flatMap(edge => [edge.from, edge.to]))];
+    const depths = new Map(nodeIds.map(stageId => [stageId, 0]));
+    for (let pass = 0; pass < nodeIds.length; pass++) {
+      for (const edge of edges) {
+        depths.set(edge.to, Math.max(depths.get(edge.to), depths.get(edge.from) + 1));
+      }
+    }
+    const stageOrder = new Map(Object.keys(Csv.STAGES).map((stageId, index) => [stageId, index]));
+    const columns = new Map();
+    for (const stageId of nodeIds) {
+      const depth = depths.get(stageId);
+      if (!columns.has(depth)) columns.set(depth, []);
+      columns.get(depth).push(stageId);
+    }
+    for (const column of columns.values()) {
+      column.sort((left, right) => (stageOrder.get(left) ?? 999) - (stageOrder.get(right) ?? 999));
+    }
+    const maximumDepth = Math.max(...depths.values());
+    const maximumRows = Math.max(...[...columns.values()].map(column => column.length));
+    const contentHeight = maximumRows * DEPENDENCY_NODE_HEIGHT + Math.max(0, maximumRows - 1) * DEPENDENCY_ROW_GAP;
+    const positions = new Map();
+    for (let depth = 0; depth <= maximumDepth; depth++) {
+      const column = columns.get(depth) || [];
+      const columnHeight = column.length * DEPENDENCY_NODE_HEIGHT + Math.max(0, column.length - 1) * DEPENDENCY_ROW_GAP;
+      const offset = (contentHeight - columnHeight) / 2;
+      column.forEach((stageId, row) => positions.set(stageId, {
+        x: DEPENDENCY_GRAPH_PADDING + depth * (DEPENDENCY_NODE_WIDTH + DEPENDENCY_COLUMN_GAP),
+        y: DEPENDENCY_GRAPH_PADDING + offset + row * (DEPENDENCY_NODE_HEIGHT + DEPENDENCY_ROW_GAP)
+      }));
+    }
+    return {
+      nodeIds,
+      positions,
+      width: DEPENDENCY_GRAPH_PADDING * 2 + (maximumDepth + 1) * DEPENDENCY_NODE_WIDTH + maximumDepth * DEPENDENCY_COLUMN_GAP + 72,
+      height: DEPENDENCY_GRAPH_PADDING * 2 + contentHeight
+    };
+  }
+
+  function dependencyPath(edge, layout, edgeIndex) {
+    const from = layout.positions.get(edge.from);
+    const to = layout.positions.get(edge.to);
+    const startX = from.x + DEPENDENCY_NODE_WIDTH;
+    const startY = from.y + DEPENDENCY_NODE_HEIGHT / 2;
+    if (edge.type === 'FF') {
+      const endX = to.x + DEPENDENCY_NODE_WIDTH;
+      const endY = to.y + DEPENDENCY_NODE_HEIGHT / 2;
+      const routeX = Math.max(startX, endX) + 42 + edgeIndex * 3;
+      const routeY = endY < startY
+        ? to.y - 18
+        : to.y + DEPENDENCY_NODE_HEIGHT + 18;
+      return {
+        d: `M ${startX} ${startY} C ${startX + 26} ${startY}, ${startX + 30} ${routeY}, ${startX + 54} ${routeY} L ${routeX} ${routeY} C ${routeX} ${routeY}, ${routeX} ${endY}, ${endX} ${endY}`,
+        labelX: routeX - 15,
+        labelY: (routeY + endY) / 2 - 5
+      };
+    }
+    const endX = to.x;
+    const endY = to.y + DEPENDENCY_NODE_HEIGHT / 2;
+    const control = Math.max(42, (endX - startX) * .46);
+    return {
+      d: `M ${startX} ${startY} C ${startX + control} ${startY}, ${endX - control} ${endY}, ${endX} ${endY}`,
+      labelX: (startX + endX) / 2,
+      labelY: (startY + endY) / 2 - 7
+    };
+  }
+
+  function renderDependencyGraph() {
+    const edges = state.dependencies;
+    const graph = document.getElementById('dependencyGraph');
+    if (!edges.length) {
+      graph.style.width = '100%';
+      graph.style.height = '260px';
+      graph.innerHTML = '<div class="empty">No active dependencies for the current stage set</div>';
+      document.getElementById('dependencyGraphSubtitle').textContent = `0 active dependencies · ${csvSources.dependencies}`;
+      return;
+    }
+    const layout = dependencyGraphLayout(edges);
+    const paths = edges.map((edge, index) => {
+      const path = dependencyPath(edge, layout, index);
+      const lag = edge.lag ? ` +${edge.lag}d` : '';
+      return `<g class="dependency-edge dependency-edge-${edge.type.toLowerCase()}"><path d="${path.d}" marker-end="url(#dependencyArrow${edge.type})"></path>${edge.type === 'FF' || edge.lag ? `<text x="${path.labelX}" y="${path.labelY}">${edge.type}${lag}</text>` : ''}</g>`;
+    }).join('');
+    const nodes = layout.nodeIds.map(stageId => {
+      const position = layout.positions.get(stageId);
+      const info = dependencyStageInfo(stageId);
+      return `<div class="dependency-node" style="left:${position.x}px;top:${position.y}px;width:${DEPENDENCY_NODE_WIDTH}px;height:${DEPENDENCY_NODE_HEIGHT}px"><i class="sc ${info.departmentCss}"></i><strong>${esc(info.name)}</strong><small>${esc(info.department)}</small><span class="dependency-port dependency-port-start" aria-hidden="true"></span><span class="dependency-port dependency-port-finish" aria-hidden="true"></span></div>`;
+    }).join('');
+    graph.style.width = `${layout.width}px`;
+    graph.style.height = `${layout.height}px`;
+    graph.innerHTML = `<svg class="dependency-edges" width="${layout.width}" height="${layout.height}" viewBox="0 0 ${layout.width} ${layout.height}" role="img" aria-label="Stage dependency graph"><defs><marker class="dependency-arrow-fs" id="dependencyArrowFS" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker class="dependency-arrow-ff" id="dependencyArrowFF" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs>${paths}</svg>${nodes}`;
+    document.getElementById('dependencyGraphSubtitle').textContent = `${edges.length} dependencies · ${edges.filter(edge => edge.type === 'FF').length} Finish-to-Finish · ${csvSources.dependencies}`;
+  }
+
+  function openDependencyGraph() {
+    renderDependencyGraph();
+    const dialog = document.getElementById('dependencyGraphDialog');
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.classList.add('open');
+  }
+
+  function closeDependencyGraph() {
+    const dialog = document.getElementById('dependencyGraphDialog');
+    if (typeof dialog.close === 'function') dialog.close();
+    else dialog.classList.remove('open');
   }
 
   function warnUnknownStages(parsed) {
@@ -345,6 +473,10 @@
     selected = null;
     document.getElementById('locationDrawer').classList.remove('open');
     renderGantt();
+  });
+  document.getElementById('dependencyGraphCloseButton').addEventListener('click', closeDependencyGraph);
+  document.getElementById('dependencyGraphDialog').addEventListener('click', event => {
+    if (event.target === event.currentTarget) closeDependencyGraph();
   });
   document.getElementById('locationsCsvFile').addEventListener('change', async event => {
     try {

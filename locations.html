@@ -64,6 +64,22 @@
   </details>
   <div class="bottom"><a class="file-label" href="location-dependencies.csv" download>Скачать dependencies CSV</a><a class="file-label" href="location-stage-capacity.csv" download>Скачать parallel people CSV</a><button class="btn2" id="stageTeamsExportButton">Скачать этапы и команды CSV</button><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
   <aside class="drawer" id="locationDrawer"><button class="close" id="locationCloseDrawerButton">×</button><div id="locationDrawerBody"></div></aside>
+  <dialog class="dependency-dialog" id="dependencyGraphDialog" aria-labelledby="dependencyGraphTitle">
+    <div class="dependency-dialog-head">
+      <div>
+        <h2 id="dependencyGraphTitle">Dependency graph</h2>
+        <div class="dependency-dialog-subtitle" id="dependencyGraphSubtitle"></div>
+      </div>
+      <button class="close dependency-dialog-close" id="dependencyGraphCloseButton" aria-label="Close dependency graph">×</button>
+    </div>
+    <div class="dependency-legend" aria-label="Dependency types">
+      <span><i class="dependency-line-sample dependency-line-fs"></i><b>FS</b> Finish → Start</span>
+      <span><i class="dependency-line-sample dependency-line-ff"></i><b>FF</b> Finish → Finish</span>
+    </div>
+    <div class="dependency-graph-viewport" id="dependencyGraphViewport">
+      <div class="dependency-graph" id="dependencyGraph"></div>
+    </div>
+  </dialog>
 
   <script src="location-csv.js"></script>
   <script src="location-scheduler.js"></script>

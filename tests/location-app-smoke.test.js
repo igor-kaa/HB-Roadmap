@@ -20,6 +20,7 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
   assert.match(html, /id="stageTeamsCsvFile"/);
   assert.match(html, /id="stageTeamsExportButton"/);
   assert.match(html, /href="location-stage-capacity\.csv"/);
+  assert.match(html, /id="dependencyGraphDialog"/);
   assert.match(index, /href="locations\.html"/);
 
   const elements = new Map();
@@ -29,6 +30,7 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
         value: id === 'locationStartDate' ? '2026-07-13' : '',
         clientWidth: id === 'locationGanttShell' ? 1440 : 0,
         innerHTML: '',
+        style: {},
         files: [],
         dataset: {},
         listeners: {},
@@ -71,6 +73,13 @@ test('locations page is file:// compatible, persists CSV uploads and links back 
   assert.match(element('locationSummary').innerHTML, /1000 mdays/);
   assert.match(element('locationGantt').innerHTML, /Beach \(Rocky Coast\)/);
   assert.match(element('locationGantt').innerHTML, /Sound FX/);
+  assert.match(element('locationSummary').innerHTML, /id="dependencySummaryCard"/);
+  element('dependencySummaryCard').listeners.click();
+  assert.match(element('dependencyGraph').innerHTML, /Stage dependency graph/);
+  assert.match(element('dependencyGraph').innerHTML, /Concept/);
+  assert.match(element('dependencyGraph').innerHTML, /dependency-edge-ff/);
+  assert.match(element('dependencyGraph').innerHTML, />FF</);
+  assert.ok(Number.parseInt(element('dependencyGraph').style.width, 10) <= 1120);
 
   const customParallelism = Csv.DEFAULT_STAGE_CAPACITY_CSV.replace('LD Macro Layout,1', 'LD Macro Layout,0');
   await element('stageCapacityCsvFile').listeners.change({
