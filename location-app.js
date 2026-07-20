@@ -157,13 +157,13 @@
     document.getElementById('legend').innerHTML = Csv.DEPARTMENTS.map(department =>
       `<span><i class="dot ${department.css}"></i>${esc(department.name)}</span>`
     ).join('');
-    document.getElementById('capacityInputs').innerHTML = Csv.DEPARTMENTS.map(department =>
+    document.getElementById('capacityInputs').innerHTML = Csv.DEPARTMENTS.filter(department => department.id !== 'unknown').map(department =>
       `<div class="control"><label>${esc(department.name)} / мес.</label><input data-capacity="${department.id}" type="number" value="${department.defaultCapacity}" min="1" step="1"></div>`
     ).join('');
   }
 
   function readCapacities() {
-    const capacities = {};
+    const capacities = { unknown: 20 };
     document.querySelectorAll('[data-capacity]').forEach(inputElement => {
       capacities[inputElement.dataset.capacity] = Number(inputElement.value);
     });
@@ -181,16 +181,35 @@
       ['Milestone-работы', input.excluded.length, 'пока исключены из расчёта'],
       ['Parallelism', new Set(Object.values(state.stageCapacities)).size === 1 ? Object.values(state.stageCapacities)[0] : 'Custom', `0 = unlimited · ${csvSources.stageCapacities}`]
     ];
-    const cardsHtml = cards.map(card =>
-      `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`
-    );
+    const uploadAction = (id, label) =>
+      `<label class="summary-card-action" for="${id}" title="${label}" aria-label="${label}">↥</label>`;
+    const downloadAction = (href, label, id = '') =>
+      `<a class="summary-card-action"${id ? ` id="${id}"` : ''} href="${href}" download title="${label}" aria-label="${label}">⇩</a>`;
+    const cardsHtml = cards.map((card, index) => {
+      if (index === 3) return `<div class="card summary-card-with-actions"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div><div class="summary-card-actions">${uploadAction('stageTeamsCsvFile', 'Загрузить CSV этапов и команд')}${downloadAction('location-stage-teams.csv', 'Скачать CSV этапов и команд', 'stageTeamsExportAction')}</div></div>`;
+      if (index === 4) return `<div class="card summary-card-with-actions"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div><div class="summary-card-actions">${uploadAction('stageCapacityCsvFile', 'Загрузить CSV parallel people')}${downloadAction('location-stage-capacity.csv', 'Скачать CSV parallel people')}</div></div>`;
+      return `<div class="card"><div class="cl">${card[0]}</div><div class="cv">${card[1]}</div><div class="cn">${card[2]}</div></div>`;
+    });
     cardsHtml.splice(3, 0,
-      `<button class="card dependency-summary-card" id="dependencySummaryCard" type="button" aria-label="View graph of ${state.dependencies.length} dependencies"><div class="cl">Dependencies</div><div class="cv">${state.dependencies.length}</div><div class="cn">${ffCount} Finish-to-Finish <span>View graph →</span></div></button>`
+      `<div class="card dependency-summary-card summary-card-with-actions" id="dependencySummaryCard" tabindex="0" role="button" aria-label="View graph of ${state.dependencies.length} dependencies"><div class="cl">Dependencies</div><div class="cv">${state.dependencies.length}</div><div class="cn">${ffCount} Finish-to-Finish <span>View graph →</span></div><div class="summary-card-actions">${uploadAction('dependenciesCsvFile', 'Загрузить CSV с dependencies')}${downloadAction('location-dependencies.csv', 'Скачать dependencies CSV')}</div></div>`
     );
     document.getElementById('locationSummary').innerHTML = cardsHtml.join('') + (input.unknownStages.length
       ? `<div class="card error-card"><div class="cl">Неизвестные этапы</div><div class="cv">${input.unknownStages.length}</div><div class="cn">${esc(input.unknownStages.map(stage => stage.name).join(', '))} · команда Unknown, capacity 20</div></div>`
       : '');
-    document.getElementById('dependencySummaryCard').addEventListener('click', openDependencyGraph);
+    const dependencyCard = document.getElementById('dependencySummaryCard');
+    dependencyCard.addEventListener('click', event => {
+      if (!event || !event.target || !event.target.closest('.summary-card-action')) openDependencyGraph();
+    });
+    dependencyCard.addEventListener('keydown', event => {
+      if ((event.key === 'Enter' || event.key === ' ') && (!event.target || !event.target.closest('.summary-card-action'))) {
+        event.preventDefault();
+        openDependencyGraph();
+      }
+    });
+    document.getElementById('stageTeamsExportAction').addEventListener('click', event => {
+      event.preventDefault();
+      exportStageTeams();
+    });
   }
 
   function dependencyStageInfo(stageId) {
