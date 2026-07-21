@@ -101,7 +101,7 @@
       ['GD доступны', fmt(state.gdAvailableDate), `${blocked} фич зависят от GD`],
       ['Development', `${total.dev.toFixed(0)} mdays`, `до ${fmt(finishFor('devAlloc'))}`],
       ['Animation', `${total.anim.toFixed(0)} mdays`, `до ${fmt(finishFor('animAlloc'))}`],
-      ['Design GD+TD', `${(total.gd + total.td).toFixed(0)} mdays`, `${total.gd.toFixed(0)} GD + ${total.td.toFixed(0)} TD`],
+      ['Game Design GD+TD', `${(total.gd + total.td).toFixed(0)} mdays`, `${total.gd.toFixed(0)} GD + ${total.td.toFixed(0)} TD`],
       ['Лимит на этап', `${state.sprintCapacities.perFeature} / sprint`, 'один человек на фичу']
     ];
     document.getElementById('summary').innerHTML = cards.map(card =>
@@ -192,7 +192,7 @@
         usage.dev / state.sprintCapacities.dev,
         usage.anim / state.sprintCapacities.anim
       );
-      html += `<div class="cap-card"><div class="cap-title"><strong>${usage.block.label}</strong><span>${maximum > .995 ? 'полная загрузка' : 'есть резерв'}</span></div><div class="cap-dates">${fmt(usage.block.start)} — ${fmt(usage.block.end)}</div>${capacityRow('Design', `GD ${usage.gd.toFixed(1)} + TD ${usage.td.toFixed(1)}`, design, state.sprintCapacities.design, [['fill-gd', usage.gd], ['fill-td', usage.td]])}${capacityRow('Development', '', usage.dev, state.sprintCapacities.dev, [['fill-dev', usage.dev]])}${capacityRow('Animation', '', usage.anim, state.sprintCapacities.anim, [['fill-anim', usage.anim]])}</div>`;
+      html += `<div class="cap-card"><div class="cap-title"><strong>${usage.block.label}</strong><span>${maximum > .995 ? 'полная загрузка' : 'есть резерв'}</span></div><div class="cap-dates">${fmt(usage.block.start)} — ${fmt(usage.block.end)}</div>${capacityRow('Game Design', `GD ${usage.gd.toFixed(1)} + TD ${usage.td.toFixed(1)}`, design, state.sprintCapacities.design, [['fill-gd', usage.gd], ['fill-td', usage.td]])}${capacityRow('Development', '', usage.dev, state.sprintCapacities.dev, [['fill-dev', usage.dev]])}${capacityRow('Animation', '', usage.anim, state.sprintCapacities.anim, [['fill-anim', usage.anim]])}</div>`;
     }
     document.getElementById('capacity').innerHTML = html;
   }

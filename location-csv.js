@@ -9,7 +9,11 @@
   const DEPENDENCY_COLUMNS = ['From Stage', 'To Stage', 'Type', 'Lag Days'];
   const STAGE_TEAM_CAPACITY_COLUMNS = ['Stage', 'Team', 'Max Parallel People'];
   const DEPARTMENTS = Object.freeze([
-    { id: 'design', name: 'Design', css: 'loc-design', defaultCapacity: 20 },
+    // `Design` remains a legacy alias so previously saved stage catalogs keep loading.
+    { id: 'gameDesign', name: 'Game Design', aliases: ['Design'], css: 'loc-game-design', defaultCapacity: 20 },
+    { id: 'narrative', name: 'Narrative', css: 'loc-narrative', defaultCapacity: 20 },
+    { id: 'vfx', name: 'VFX', css: 'loc-vfx', defaultCapacity: 20 },
+    { id: 'conceptArt', name: 'Concept Art', css: 'loc-concept-art', defaultCapacity: 40 },
     { id: 'levelDesign', name: 'Level Design', css: 'loc-ld', defaultCapacity: 80 },
     { id: 'levelArt', name: 'Level Art', css: 'loc-la', defaultCapacity: 40 },
     { id: 'modeling', name: '3D Outsource', css: 'loc-3d', defaultCapacity: 60 },
@@ -85,7 +89,11 @@
 
   function findDepartment(team) {
     const normalized = String(team || '').trim().toLowerCase();
-    return DEPARTMENTS.find(item => item.id.toLowerCase() === normalized || item.name.toLowerCase() === normalized);
+    return DEPARTMENTS.find(item =>
+      item.id.toLowerCase() === normalized ||
+      item.name.toLowerCase() === normalized ||
+      (item.aliases || []).some(alias => alias.toLowerCase() === normalized)
+    );
   }
 
   function parseStageTeamCapacities(text) {

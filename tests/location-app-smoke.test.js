@@ -80,6 +80,10 @@ test('locations page loads external CSV sources and persists the unified stage c
   };
 
   vm.runInNewContext(read('location-app.js'), context, { filename: 'location-app.js' });
+  assert.match(element('capacityInputs').innerHTML, /Game Design/);
+  assert.match(element('capacityInputs').innerHTML, /Narrative/);
+  assert.match(element('capacityInputs').innerHTML, /VFX/);
+  assert.match(element('capacityInputs').innerHTML, /Concept Art/);
   assert.match(element('locationSummary').innerHTML, />10</);
   assert.match(element('locationSummary').innerHTML, /1000 mdays/);
   assert.match(element('locationSummary').innerHTML, /Stage catalog/);
@@ -92,7 +96,7 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('dependencyGraph').innerHTML, /dependency-edge-ff/);
   assert.match(element('dependencyGraph').innerHTML, />FF</);
 
-  const customCatalog = catalogText.replace('Concept,Design,1', 'Concept,Design,0');
+  const customCatalog = catalogText.replace('Concept,Concept Art,1', 'Concept,Concept Art,0');
   await element('stageTeamCapacityCsvFile').listeners.change({
     target: { files: [{ name: 'custom-stage-catalog.csv', text: async () => customCatalog }] }
   });
@@ -108,7 +112,7 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('locationGantt').innerHTML, /New Review Stage/);
   assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /New Review Stage,Unknown,1/);
 
-  const reassignedCatalog = catalogText + '\nNew Review Stage,Design,2';
+  const reassignedCatalog = catalogText + '\nNew Review Stage,Game Design,2';
   await element('stageTeamCapacityCsvFile').listeners.change({
     target: { files: [{ name: 'reassigned-stage-catalog.csv', text: async () => reassignedCatalog }] }
   });

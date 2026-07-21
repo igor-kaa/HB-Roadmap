@@ -33,7 +33,7 @@ Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
 
 ```csv
 Stage,Team,Max Parallel People
-Stage A,Design,1
+Stage A,Game Design,1
 Stage B,Level Art,0
 ```
 
@@ -66,7 +66,7 @@ Dependencies CSV не является источником этапов: обе
 
 ### Capacity и сохранение
 
-Месячные мощности команд задаются на странице. Значения по умолчанию: Design — 20, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц.
+Месячные мощности команд задаются на странице. Значения по умолчанию: Game Design — 20, Narrative — 20, VFX — 20, Concept Art — 40, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц. Старое имя команды `Design` принимается как совместимый alias и отображается как `Game Design`.
 
 Загруженные estimates, dependencies и объединённый stage/team/capacity CSV сохраняются в browser local storage. Кнопка сброса очищает сохранённые версии и снова загружает внешние CSV-файлы из рабочей директории.
 

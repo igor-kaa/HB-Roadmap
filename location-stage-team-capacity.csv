@@ -1,14 +1,15 @@
 Stage,Team,Max Parallel People
-Concept,Design,1
-Script & Narrative,Design,1
+Concept,Concept Art,1
+Script & Narrative,Narrative,1
 LD Macro Layout,Level Design,0
 LD Micro Layout,Level Design,1
 LD Greybox,Unknown,0
-Gameplay Pass,Design,1
-Gameplay Balancing,Design,1
+Gameplay Pass,Game Design,1
+Gameplay Balancing,Game Design,1
 LA Asset List,Level Art,1
 Modelling,3D Outsource,0
 LA Dressing,Level Art,0
 Lighting,Level Art,0
-Visual FX,Technical Art,1
+Lighting & VFX,VFX,1
+Visual FX,VFX,1
 Sound,Sound,1

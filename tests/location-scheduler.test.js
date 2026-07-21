@@ -28,14 +28,14 @@ function scheduleDefault() {
 }
 
 test('stage source of truth is the union of estimates and stage/team/capacity CSV', () => {
-  assert.equal(BASE_CATALOG.length, 12);
-  assert.equal(INITIAL_INPUT.unconfiguredStages.length, 3);
+  assert.equal(BASE_CATALOG.length, 14);
+  assert.equal(INITIAL_INPUT.unconfiguredStages.length, 1);
   assert.equal(STAGE_CATALOG.length, 15);
   assert.equal(INITIAL_INPUT.locations.length, 10);
   assert.equal(INITIAL_INPUT.locations[0].tasks.length, 10);
   assert.equal(INITIAL_INPUT.locations.flatMap(location => location.tasks).length, 100);
 
-  assert.deepEqual(INITIAL_INPUT.unconfiguredStages.map(stage => stage.name), ['Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest']);
+  assert.deepEqual(INITIAL_INPUT.unconfiguredStages.map(stage => stage.name), ['QA / Playtest']);
   const estimateOnly = STAGE_CATALOG.filter(stage => INITIAL_INPUT.unconfiguredStages.some(item => item.id === stage.id));
   assert.ok(estimateOnly.every(stage => stage.departmentId === 'unknown' && stage.maxParallelPeople === 1));
 });
@@ -49,23 +49,44 @@ test('the parser creates one task per estimate row without hardcoded expansion o
     'Modelling', 'LA Dressing', 'Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest'
   ]);
   assert.equal(first.tasks.reduce((sum, task) => sum + task.estimate, 0), 100);
+  assert.equal(first.tasks.find(task => task.stageName === 'Lighting & VFX').department, 'VFX');
 });
 
 test('combined CSV controls both team and parallelism for a dynamic stage', () => {
   const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
-Review Gate,Design,2`);
+Review Gate,Game Design,2`);
   const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
 Test Location,High,Review Gate,Not Started,5,`, catalog);
   const task = input.locations[0].tasks[0];
 
-  assert.equal(task.departmentId, 'design');
+  assert.equal(task.departmentId, 'gameDesign');
   assert.equal(Csv.stageCapacities(catalog)[task.stageId], 2);
-  assert.match(Csv.serializeStageTeamCapacities(catalog), /Review Gate,Design,2/);
+  assert.match(Csv.serializeStageTeamCapacities(catalog), /Review Gate,Game Design,2/);
+});
+
+test('department catalog includes the new production teams and capacities', () => {
+  assert.deepEqual(
+    Csv.DEPARTMENTS.filter(department => department.id !== 'unknown').map(department => [department.name, department.defaultCapacity]),
+    [
+      ['Game Design', 20],
+      ['Narrative', 20],
+      ['VFX', 20],
+      ['Concept Art', 40],
+      ['Level Design', 80],
+      ['Level Art', 40],
+      ['3D Outsource', 60],
+      ['Technical Art', 20],
+      ['Sound', 20]
+    ]
+  );
+  const legacy = Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview Gate,Design,1');
+  assert.equal(legacy[0].departmentId, 'gameDesign');
+  assert.equal(legacy[0].team, 'Game Design');
 });
 
 test('combined CSV validates duplicates, teams and capacity', () => {
   assert.throws(
-    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Design,-1'),
+    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Game Design,-1'),
     /Max Parallel People/
   );
   assert.throws(
@@ -73,7 +94,7 @@ test('combined CSV validates duplicates, teams and capacity', () => {
     /Unknown team/
   );
   assert.throws(
-    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Design,1\n review ,Design,2'),
+    () => Csv.parseStageTeamCapacities('Stage,Team,Max Parallel People\nReview,Game Design,1\n review ,Game Design,2'),
     /Duplicate stage/
   );
 });

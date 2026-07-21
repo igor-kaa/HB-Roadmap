@@ -27,7 +27,7 @@
     <div class="controls">
       <div class="control"><label>Начало roadmap (понедельник)</label><input id="startDate" type="date" value="2026-07-13"></div>
       <div class="control"><label>GD доступны с месяца</label><input id="gdStartMonth" type="month" value="2026-07"></div>
-      <div class="control"><label>Design GD+TD / мес.</label><input id="designCap" type="number" value="60" min="1"></div>
+      <div class="control"><label>Game Design GD+TD / мес.</label><input id="designCap" type="number" value="60" min="1"></div>
       <div class="control"><label>Development / мес.</label><input id="devCap" type="number" value="100" min="1"></div>
       <div class="control"><label>Animation / мес.</label><input id="animCap" type="number" value="40" min="1"></div>
       <div class="control"><label>Макс. этап/фича / мес.</label><input id="featureCap" type="number" value="20" min="1"></div>
@@ -54,7 +54,7 @@
   <section class="section">
     <div class="section-head">
       <h2>Capacity по двухнедельным спринтам</h2>
-      <div class="hint">Design 30 · Development 50 · Animation 20 · максимум 10 mdays на этап одной фичи</div>
+      <div class="hint">Game Design 30 · Development 50 · Animation 20 · максимум 10 mdays на этап одной фичи</div>
     </div>
     <div class="capacity-grid" id="capacity"></div>
   </section>
@@ -62,7 +62,7 @@
     <summary>Правила scheduling engine</summary>
     <div class="algo">
       1. Roadmap начинается в понедельник; спринты идут непрерывными блоками по 14 календарных дней.<br>
-      2. Месячные capacity делятся пополам для спринта: Design 30, Development 50, Animation 20 mdays.<br>
+      2. Месячные capacity делятся пополам для спринта: Game Design 30, Development 50, Animation 20 mdays.<br>
       3. Один этап одной фичи получает не больше 10 mdays за спринт — один full-time специалист.<br>
       4. Все GD-задачи заблокированы до первого рабочего дня выбранного месяца. Фичи с GD=0 не блокируются.<br>
       5. DEV, Animation и TD стартуют только после завершения GD своей фичи.<br>
