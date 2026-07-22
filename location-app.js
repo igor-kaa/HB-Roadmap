@@ -46,6 +46,7 @@
   };
   let state = null;
   let selected = null;
+  const collapsedLocations = new Set();
 
   function getBrowserStorage() {
     try {
@@ -172,6 +173,25 @@
       ? {
           start: state.days[task.allocation[0].index].date,
           end: state.days[task.allocation[task.allocation.length - 1].index].date
+        }
+      : null;
+  }
+
+  function locationRange(location) {
+    let startIndex = Infinity;
+    let endIndex = -Infinity;
+    for (const task of location.tasks) {
+      for (const item of task.allocation) {
+        startIndex = Math.min(startIndex, item.index);
+        endIndex = Math.max(endIndex, item.index);
+      }
+    }
+    return Number.isFinite(startIndex)
+      ? {
+          startIndex,
+          endIndex,
+          start: state.days[startIndex].date,
+          end: state.days[endIndex].date
         }
       : null;
   }
@@ -409,36 +429,63 @@
     }
 
     for (const location of visible) {
-      const rowHeight = ROW_HEADER + location.tasks.length * LANE_HEIGHT;
+      const collapsed = collapsedLocations.has(location.id);
+      const rowHeight = ROW_HEADER + (collapsed ? 0 : location.tasks.length * LANE_HEIGHT);
       const grid = blocks.map(block =>
         `<div class="grid-sprint" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px;height:${rowHeight}px"></div>`
       ).join('');
-      const laneLines = location.tasks.map((task, index) =>
+      const laneLines = collapsed ? '' : location.tasks.map((task, index) =>
         `<div class="location-lane" style="top:${ROW_HEADER + index * LANE_HEIGHT}px"></div>`
       ).join('');
-      const labels = location.tasks.map(task =>
+      const labels = collapsed ? '' : location.tasks.map(task =>
         `<div class="location-stage-label"><i class="sc ${task.departmentCss}"></i><span>${esc(task.stageName)}</span><small>${esc(task.department)} · ${task.estimate} md · ${task.maxParallelPeople === 0 ? 'unlimited' : `×${task.maxParallelPeople}`}</small></div>`
       ).join('');
       let bars = '';
-      location.tasks.forEach((task, index) => {
-        const taskRange = range(task);
-        for (const segment of segments(task.allocation)) {
-          const start = state.days[segment.start].date;
-          const end = Scheduler.addDays(state.days[segment.end].date, 1);
-          const left = Scheduler.daysBetween(state.startDate, start) * dayWidth;
-          const width = Math.max(3, Scheduler.daysBetween(start, end) * dayWidth);
-          bars += `<div class="bar location-bar ${task.departmentCss}" style="top:${ROW_HEADER + index * LANE_HEIGHT + 5}px;left:${left}px;width:${width}px" title="${esc(task.stageName)} · ${task.estimate} mdays · ${fmt(taskRange.start)} — ${fmt(taskRange.end)}"><span>${esc(task.stageName)}</span></div>`;
-        }
-      });
+      if (!collapsed) {
+        location.tasks.forEach((task, index) => {
+          const taskRange = range(task);
+          for (const segment of segments(task.allocation)) {
+            const start = state.days[segment.start].date;
+            const end = Scheduler.addDays(state.days[segment.end].date, 1);
+            const left = Scheduler.daysBetween(state.startDate, start) * dayWidth;
+            const width = Math.max(3, Scheduler.daysBetween(start, end) * dayWidth);
+            bars += `<div class="bar location-bar ${task.departmentCss}" style="top:${ROW_HEADER + index * LANE_HEIGHT + 5}px;left:${left}px;width:${width}px" title="${esc(task.stageName)} · ${task.estimate} mdays · ${fmt(taskRange.start)} — ${fmt(taskRange.end)}"><span>${esc(task.stageName)}</span></div>`;
+          }
+        });
+      }
+      const totalRange = locationRange(location);
+      const totalBar = totalRange ? (() => {
+        const endExclusive = Scheduler.addDays(totalRange.end, 1);
+        const left = Scheduler.daysBetween(state.startDate, totalRange.start) * dayWidth;
+        const duration = Scheduler.daysBetween(totalRange.start, endExclusive);
+        const width = Math.max(3, duration * dayWidth);
+        return `<div class="bar location-total-bar" style="left:${left}px;width:${width}px" title="${esc(location.name)} · весь цикл · ${fmt(totalRange.start)} — ${fmt(totalRange.end)}"><span>Весь цикл · ${duration} дн.</span></div>`;
+      })() : '';
       const statusCount = location.tasks.filter(task => task.status).length;
-      html += `<div class="location-row ${selected === location.id ? 'selected' : ''}" data-id="${location.id}" style="width:${fullWidth}px;height:${rowHeight}px"><div class="location-meta" style="height:${rowHeight}px"><div class="location-row-title"><strong>${esc(location.name)}</strong><span>${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} md · ${statusCount} status</span></div>${labels}</div><div class="location-timeline" style="width:${timelineWidth}px;height:${rowHeight}px">${grid}${laneLines}${bars}</div></div>`;
+      const toggleLabel = `${collapsed ? 'Развернуть' : 'Свернуть'} этапы локации ${location.name}`;
+      html += `<div class="location-row${collapsed ? ' collapsed' : ''}${selected === location.id ? ' selected' : ''}" data-id="${location.id}" style="width:${fullWidth}px;height:${rowHeight}px"><div class="location-meta" style="height:${rowHeight}px"><div class="location-row-title"><div class="location-row-heading"><button class="location-toggle" type="button" data-location-toggle="${location.id}" aria-expanded="${!collapsed}" aria-label="${esc(toggleLabel)}" title="${esc(toggleLabel)}">${collapsed ? '▸' : '▾'}</button><strong>${esc(location.name)}</strong></div><span>${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} md · ${statusCount} status</span></div>${labels}</div><div class="location-timeline" style="width:${timelineWidth}px;height:${rowHeight}px">${grid}${totalBar}${laneLines}${bars}</div></div>`;
     }
     html += '</div>';
     const gantt = document.getElementById('locationGantt');
     gantt.innerHTML = html;
-    gantt.querySelectorAll('.location-row').forEach(row => {
-      row.onclick = () => openDrawer(row.dataset.id);
-    });
+    updateCollapseAllButton();
+  }
+
+  function updateCollapseAllButton() {
+    const button = document.getElementById('toggleAllLocationsButton');
+    if (!button) return;
+    const allCollapsed = state && state.locations.length > 0 && state.locations.every(location => collapsedLocations.has(location.id));
+    button.disabled = !state || !state.locations.length;
+    button.textContent = allCollapsed ? 'Развернуть все' : 'Свернуть все';
+    button.setAttribute('aria-label', allCollapsed ? 'Развернуть этапы всех локаций' : 'Свернуть этапы всех локаций');
+  }
+
+  function toggleAllLocations() {
+    if (!state || !state.locations.length) return;
+    const allCollapsed = state.locations.every(location => collapsedLocations.has(location.id));
+    if (allCollapsed) collapsedLocations.clear();
+    else state.locations.forEach(location => collapsedLocations.add(location.id));
+    renderGantt();
   }
 
   function capacityRow(department, used, total) {
@@ -496,6 +543,7 @@
       </div>`;
     document.getElementById('locationGantt').innerHTML = '<div class="empty">Ожидание estimates CSV</div>';
     document.getElementById('locationCapacity').innerHTML = '';
+    updateCollapseAllButton();
   }
 
   function recalculate() {
@@ -518,6 +566,7 @@
       document.getElementById('locationSummary').innerHTML = `<div class="card error-card"><div class="cl">Ошибка расчёта</div><div class="cn">${esc(error.message)}</div></div>`;
       document.getElementById('locationGantt').innerHTML = `<div class="empty">${esc(error.message)}</div>`;
       document.getElementById('locationCapacity').innerHTML = '';
+      updateCollapseAllButton();
     }
   }
 
@@ -562,6 +611,21 @@
   renderControls();
   document.getElementById('locationRecalcButton').addEventListener('click', recalculate);
   document.getElementById('locationSearch').addEventListener('input', renderGantt);
+  document.getElementById('toggleAllLocationsButton').addEventListener('click', toggleAllLocations);
+  document.getElementById('locationGantt').addEventListener('click', event => {
+    const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+    if (!target) return;
+    const toggle = target.closest('[data-location-toggle]');
+    if (toggle) {
+      const locationId = toggle.dataset.locationToggle;
+      if (collapsedLocations.has(locationId)) collapsedLocations.delete(locationId);
+      else collapsedLocations.add(locationId);
+      renderGantt();
+      return;
+    }
+    const row = target.closest('.location-row');
+    if (row) openDrawer(row.dataset.id);
+  });
   document.getElementById('locationExportButton').addEventListener('click', exportCsv);
   document.getElementById('stageTeamCapacityExportButton').addEventListener('click', exportStageTeamCapacities);
   document.getElementById('resetSavedCsvButton').addEventListener('click', resetSavedCsv);

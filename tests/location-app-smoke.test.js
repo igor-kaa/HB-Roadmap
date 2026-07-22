@@ -23,6 +23,7 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(html, /href="location-stage-team-capacity\.csv"/);
   assert.doesNotMatch(html, /stageCapacityCsvFile|stageTeamsCsvFile/);
   assert.match(html, /id="dependencyGraphDialog"/);
+  assert.match(html, /id="toggleAllLocationsButton"/);
   assert.match(index, /href="locations\.html"/);
 
   const elements = new Map();
@@ -37,6 +38,7 @@ test('locations page loads external CSV sources and persists the unified stage c
         dataset: {},
         listeners: {},
         addEventListener(type, listener) { this.listeners[type] = listener; },
+        setAttribute(name, value) { this[name] = value; },
         querySelectorAll() { return []; },
         classList: { add() {}, remove() {} }
       });
@@ -89,6 +91,27 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('locationSummary').innerHTML, /Stage catalog/);
   assert.match(element('locationGantt').innerHTML, /Beach \(Rocky Coast\)/);
   assert.match(element('locationGantt').innerHTML, /Lighting &amp; VFX/);
+  assert.match(element('locationGantt').innerHTML, /data-location-toggle=/);
+  assert.match(element('locationGantt').innerHTML, /location-total-bar/);
+  assert.match(element('locationGantt').innerHTML, /Весь цикл/);
+  element('toggleAllLocationsButton').listeners.click();
+  assert.doesNotMatch(element('locationGantt').innerHTML, /location-stage-label/);
+  assert.match(element('locationGantt').innerHTML, /location-row collapsed/);
+  assert.match(element('locationGantt').innerHTML, /location-total-bar/);
+  assert.equal(element('toggleAllLocationsButton').textContent, 'Развернуть все');
+  element('toggleAllLocationsButton').listeners.click();
+  assert.match(element('locationGantt').innerHTML, /location-stage-label/);
+  assert.equal(element('toggleAllLocationsButton').textContent, 'Свернуть все');
+  const firstLocationId = element('locationGantt').innerHTML.match(/data-location-toggle="([^"]+)"/)[1];
+  const individualToggle = {
+    dataset: { locationToggle: firstLocationId },
+    closest(selector) { return selector === '[data-location-toggle]' ? this : null; }
+  };
+  element('locationGantt').listeners.click({ target: individualToggle });
+  assert.match(element('locationGantt').innerHTML, new RegExp(`location-row collapsed[^>]+data-id="${firstLocationId}"[^>]+height:36px`));
+  assert.equal(element('toggleAllLocationsButton').textContent, 'Свернуть все');
+  element('locationGantt').listeners.click({ target: individualToggle });
+  assert.doesNotMatch(element('locationGantt').innerHTML, /location-row collapsed/);
   assert.match(element('locationSummary').innerHTML, /id="dependencySummaryCard"/);
   element('dependencySummaryCard').listeners.click();
   assert.match(element('dependencyGraph').innerHTML, /Stage dependency graph/);
@@ -142,6 +165,7 @@ test('blocked file:// default requests do not prevent an estimates upload from b
         dataset: {},
         listeners: {},
         addEventListener(type, listener) { this.listeners[type] = listener; },
+        setAttribute(name, value) { this[name] = value; },
         querySelectorAll() { return []; },
         classList: { add() {}, remove() {} }
       });
@@ -192,5 +216,22 @@ Test Location,High,Stage From Upload,Not Started,2,`;
 
   assert.match(element('locationGantt').innerHTML, /Test Location/);
   assert.match(element('locationGantt').innerHTML, /Stage From Upload/);
+  assert.match(element('locationGantt').innerHTML, /location-total-bar/);
+  element('toggleAllLocationsButton').listeners.click();
+  assert.doesNotMatch(element('locationGantt').innerHTML, /location-stage-label/);
+  assert.match(element('locationGantt').innerHTML, /location-row collapsed/);
+  assert.match(element('locationGantt').innerHTML, /location-total-bar/);
+  element('toggleAllLocationsButton').listeners.click();
+  assert.match(element('locationGantt').innerHTML, /location-stage-label/);
+  const locationId = element('locationGantt').innerHTML.match(/data-location-toggle="([^"]+)"/)[1];
+  const toggleTarget = {
+    dataset: { locationToggle: locationId },
+    closest(selector) { return selector === '[data-location-toggle]' ? this : null; }
+  };
+  element('locationGantt').listeners.click({ target: toggleTarget });
+  assert.match(element('locationGantt').innerHTML, /location-row collapsed/);
+  assert.doesNotMatch(element('locationGantt').innerHTML, /location-stage-label/);
+  element('locationGantt').listeners.click({ target: toggleTarget });
+  assert.match(element('locationGantt').innerHTML, /location-stage-label/);
   assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /Stage From Upload,Unknown,1/);
 });

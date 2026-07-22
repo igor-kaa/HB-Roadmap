@@ -1,15 +1,22 @@
 Stage,Team,Max Parallel People
-Concept,Concept Art,1
-Script & Narrative,Narrative,1
-LD Macro Layout,Level Design,0
-LD Micro Layout,Level Design,1
-LD Greybox,Unknown,0
-Gameplay Pass,Game Design,1
-Gameplay Balancing,Game Design,1
-LA Asset List,Level Art,1
-Modelling,3D Outsource,0
-LA Dressing,Level Art,0
-Lighting,Level Art,0
-Lighting & VFX,VFX,1
-Visual FX,VFX,1
-Sound,Sound,1
+Art: Concept Global,Concept Art,1
+LD: RnD & Sketch,Level Design,1
+GD: Gameflow Vision,Game Design,1
+Narrative: Outline,Narrative,1
+Art: Concept Arts,Concept Art,1
+LD: Macro Blockout,Level Design,1
+Narrative: Treatment,Narrative,1
+LA: Asset List,Level Art,1
+3D: Modelling,3D Outsource,0
+LD: Micro Blockout,Level Design,0
+Narrative: Script,Narrative,1
+Art: Additional Concept,Concept Art,1
+LA: Dressing,Level Art,1
+GD: Gameplay Pass,Game Design,1
+LA: Lighting,Level Art,1
+VFX,VFX,1
+Narrative: Quests,Narrative,1
+GD: Balancing & Questflow,Game Design,0
+SFX & VO & Music,Sound,0
+TA: Optimization,Technical Art,1
+LD Pass,Level Design,0

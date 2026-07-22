@@ -1,11 +1,30 @@
 From Stage,To Stage,Type,Lag Days
-Concept,LD Macro Layout,FS,0
-LD Macro Layout,LD Greybox,FS,0
-LD Greybox,Gameplay Pass,FS,0
-Concept,LA Asset List,FS,0
-LA Asset List,Modelling,FS,0
-LD Greybox,LA Dressing,FS,0
-Modelling,LA Dressing,FF,0
-LA Dressing,Lighting,FS,0
-LD Greybox,Visual FX,FS,0
-LD Greybox,Sound,FS,0
+Art: Concept Global,Art: Concept Arts,FS
+Art: Concept Arts,Art: Additional Concept,FS
+
+LD: RnD & Sketch,LD: Macro Blockout,FS
+LD: Macro Blockout,LD: Micro Blockout,FS
+
+GD: Gameflow Vision,GD: Gameplay Pass,FS
+GD: Gameplay Pass,GD: Balancing & Questflow,FS
+
+Narrative: Outline,Narrative: Treatment,FS
+Narrative: Treatment,Narrative: Script,FS
+Narrative: Script,Narrative: Quests,FS
+
+LA: Asset List,LA: Dressing,FS
+LA: Dressing,LA: Lighting,FS
+
+GD: Gameflow Vision,LD: Macro Blockout,FS
+LD: Macro Blockout,LA: Asset List,FS
+Art: Concept Global,LA: Asset List,FS
+
+LA: Asset List,3D: Modelling,FS
+LD: Micro Blockout,GD: Gameplay Pass,FS
+GD: Gameplay Pass,Narrative: Quests,FS
+
+LA: Lighting,VFX,FS
+LA: Lighting,TA: Optimization,FS
+
+VFX,LD Pass,FS
+Narrative: Quests,SFX & VO & Music,FS
