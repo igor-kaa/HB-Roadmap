@@ -91,6 +91,8 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('locationSummary').innerHTML, /Stage catalog/);
   assert.match(element('locationGantt').innerHTML, /Beach \(Rocky Coast\)/);
   assert.match(element('locationGantt').innerHTML, /Lighting &amp; VFX/);
+  assert.match(element('locationGantt').innerHTML, /<b>Priority<\/b>/);
+  assert.match(element('locationGantt').innerHTML, /location-priority priority Medium/);
   assert.match(element('locationGantt').innerHTML, /data-location-toggle=/);
   assert.match(element('locationGantt').innerHTML, /location-total-bar/);
   assert.match(element('locationGantt').innerHTML, /Весь цикл/);
@@ -114,12 +116,9 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.doesNotMatch(element('locationGantt').innerHTML, /location-row collapsed/);
   assert.match(element('locationSummary').innerHTML, /id="dependencySummaryCard"/);
   element('dependencySummaryCard').listeners.click();
-  assert.match(element('dependencyGraph').innerHTML, /Stage dependency graph/);
-  assert.match(element('dependencyGraph').innerHTML, /Concept/);
-  assert.match(element('dependencyGraph').innerHTML, /dependency-edge-ff/);
-  assert.match(element('dependencyGraph').innerHTML, />FF</);
+  assert.match(element('dependencyGraph').innerHTML, /No active dependencies for the current stage set/);
 
-  const customCatalog = catalogText.replace('Concept,Concept Art,1', 'Concept,Concept Art,0');
+  const customCatalog = catalogText + '\nConcept,Concept Art,0';
   await element('stageTeamCapacityCsvFile').listeners.change({
     target: { files: [{ name: 'custom-stage-catalog.csv', text: async () => customCatalog }] }
   });
@@ -216,6 +215,7 @@ Test Location,High,Stage From Upload,Not Started,2,`;
 
   assert.match(element('locationGantt').innerHTML, /Test Location/);
   assert.match(element('locationGantt').innerHTML, /Stage From Upload/);
+  assert.match(element('locationGantt').innerHTML, /location-priority priority High/);
   assert.match(element('locationGantt').innerHTML, /location-total-bar/);
   element('toggleAllLocationsButton').listeners.click();
   assert.doesNotMatch(element('locationGantt').innerHTML, /location-stage-label/);

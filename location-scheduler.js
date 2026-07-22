@@ -10,11 +10,17 @@
   const CALENDAR_DAYS_PER_SPRINT = 14;
   const SPRINT_NUMBER_BASE = '2025-11-17';
   const EPSILON = 1e-8;
+  const MAX_ACTIVE_LOCATIONS_PER_DEPARTMENT = 2;
   const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+  const PRIORITY_ALIASES = { P0: 'Critical', P1: 'High', P2: 'Medium', P3: 'Low' };
 
   function normalizePriority(value) {
     const text = String(value || '').trim();
-    return Object.keys(PRIORITY_RANK).find(key => key.toLowerCase() === text.toLowerCase()) || 'Medium';
+    if (!text) return 'Medium';
+    const canonical = Object.keys(PRIORITY_RANK).find(key => key.toLowerCase() === text.toLowerCase());
+    const alias = PRIORITY_ALIASES[text.toUpperCase()];
+    if (canonical || alias) return canonical || alias;
+    throw new Error(`Unknown location priority: ${text}`);
   }
 
   function parseDate(value) {
@@ -101,6 +107,31 @@
       a.locationOrder - b.locationOrder || a.stageOrder - b.stageOrder;
   }
 
+  function compareLocations(a, b) {
+    return PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.order - b.order;
+  }
+
+  function fsDependenciesReady(task, taskById, dayIndex) {
+    return task.incoming.filter(item => item.type === 'FS').every(item => {
+      const predecessor = taskById.get(item.taskId);
+      return predecessor.completeIndex !== null && dayIndex >= predecessor.completeIndex + 1 + item.lag;
+    });
+  }
+
+  function finishDependenciesReady(task, taskById, dayIndex) {
+    return task.incoming.filter(item => item.type === 'FF').every(item => {
+      const predecessor = taskById.get(item.taskId);
+      return predecessor.completeIndex !== null && dayIndex >= predecessor.completeIndex + item.lag;
+    });
+  }
+
+  function allocationAmount(task, taskById, dayIndex, available) {
+    const taskCapacity = task.maxParallelPeople === 0 ? available : task.maxParallelPeople;
+    const amount = Math.min(taskCapacity, task.remaining, available);
+    const wouldFinish = amount + EPSILON >= task.remaining;
+    return wouldFinish && !finishDependenciesReady(task, taskById, dayIndex) ? 0 : amount;
+  }
+
   function schedule(input, dependencies, stageCapacities, startDateValue, capacities) {
     const startDate = parseDate(startDateValue);
     if (startDate.getDay() !== 1) throw new Error('Начало roadmap должно приходиться на понедельник');
@@ -122,24 +153,27 @@
       }
     }
     const stageOrder = new Map([...stageIds].map((id, index) => [id, index]));
-    const locations = input.locations.map(location => ({
-      ...location,
-      priorityDisplay: location.priority,
-      priority: normalizePriority(location.priority),
-      tasks: location.tasks.map(task => ({
-        ...task,
-        locationId: location.id,
-        locationName: location.name,
-        locationOrder: location.order,
-        priority: normalizePriority(location.priority),
-        stageOrder: stageOrder.get(task.stageId),
-        maxParallelPeople: stageCapacities[task.stageId],
-        remaining: task.estimate,
-        allocation: [],
-        completeIndex: task.estimate <= EPSILON ? -1 : null,
-        incoming: []
-      }))
-    }));
+    const locations = input.locations.map(location => {
+      const priority = normalizePriority(location.priority);
+      return {
+        ...location,
+        priorityDisplay: String(location.priority || '').trim() || priority,
+        priority,
+        tasks: location.tasks.map(task => ({
+          ...task,
+          locationId: location.id,
+          locationName: location.name,
+          locationOrder: location.order,
+          priority,
+          stageOrder: stageOrder.get(task.stageId),
+          maxParallelPeople: stageCapacities[task.stageId],
+          remaining: task.estimate,
+          allocation: [],
+          completeIndex: task.estimate <= EPSILON ? -1 : null,
+          incoming: []
+        }))
+      };
+    }).sort(compareLocations);
     const tasks = locations.flatMap(location => location.tasks);
     const taskById = new Map(tasks.map(task => [task.id, task]));
 
@@ -165,24 +199,21 @@
         if (available <= EPSILON) continue;
         const ready = tasks.filter(task => {
           if (task.departmentId !== departmentId || task.remaining <= EPSILON) return false;
-          return task.incoming.filter(item => item.type === 'FS').every(item => {
-            const predecessor = taskById.get(item.taskId);
-            return predecessor.completeIndex !== null && dayIndex >= predecessor.completeIndex + 1 + item.lag;
-          });
+          return fsDependenciesReady(task, taskById, dayIndex);
         }).sort(compareTasks);
+
+        const focusLocationIds = new Set();
+        for (const task of ready) {
+          if (focusLocationIds.has(task.locationId)) continue;
+          if (allocationAmount(task, taskById, dayIndex, day.capacities[departmentId]) <= EPSILON) continue;
+          focusLocationIds.add(task.locationId);
+          if (focusLocationIds.size === MAX_ACTIVE_LOCATIONS_PER_DEPARTMENT) break;
+        }
 
         for (const task of ready) {
           if (available <= EPSILON) break;
-          const taskCapacity = task.maxParallelPeople === 0 ? available : task.maxParallelPeople;
-          let amount = Math.min(taskCapacity, task.remaining, available);
-          const wouldFinish = amount + EPSILON >= task.remaining;
-          if (wouldFinish) {
-            const finishAllowed = task.incoming.filter(item => item.type === 'FF').every(item => {
-              const predecessor = taskById.get(item.taskId);
-              return predecessor.completeIndex !== null && dayIndex >= predecessor.completeIndex + item.lag;
-            });
-            if (!finishAllowed) amount = 0;
-          }
+          if (!focusLocationIds.has(task.locationId)) continue;
+          const amount = allocationAmount(task, taskById, dayIndex, available);
           if (amount <= EPSILON) continue;
           task.remaining -= amount;
           if (task.remaining <= EPSILON) {
@@ -224,6 +255,12 @@
         if (day.used[departmentId] > day.capacities[departmentId] + 1e-6) {
           throw new Error(`Capacity overload: ${departmentId} / ${dateKey(day.date)}`);
         }
+        const activeLocations = new Set(day.allocations
+          .filter(allocation => allocation.departmentId === departmentId)
+          .map(allocation => allocation.locationId));
+        if (activeLocations.size > MAX_ACTIVE_LOCATIONS_PER_DEPARTMENT) {
+          throw new Error(`Location focus overload: ${departmentId} / ${dateKey(day.date)}`);
+        }
       }
     }
 
@@ -237,7 +274,12 @@
       endDate: usedDays[usedDays.length - 1].date,
       capacities: { ...capacities },
       sprintCapacities,
-      constants: { WORKDAYS_PER_MONTH, WORKDAYS_PER_SPRINT, CALENDAR_DAYS_PER_SPRINT }
+      constants: {
+        WORKDAYS_PER_MONTH,
+        WORKDAYS_PER_SPRINT,
+        CALENDAR_DAYS_PER_SPRINT,
+        MAX_ACTIVE_LOCATIONS_PER_DEPARTMENT
+      }
     };
   }
 

@@ -3,7 +3,7 @@
 
   const Csv = HyperboreaLocationCsv;
   const Scheduler = HyperboreaLocationScheduler;
-  const LEFT = 430;
+  const LEFT = 500;
   const TIMELINE_GUTTER = 18;
   const MIN_DAY_WIDTH = 3.65;
   const SPRINT_NUMBER_BASE = new Date(2025, 10, 17, 12);
@@ -419,7 +419,7 @@
     const dayWidth = Math.max(MIN_DAY_WIDTH, available / totalDays);
     const timelineWidth = Math.ceil(totalDays * dayWidth);
     const fullWidth = LEFT + timelineWidth;
-    let html = `<div style="width:${fullWidth}px"><div class="sprint-header"><div class="sprint-left">Location · stage · department · estimate</div><div class="sprint-track" style="width:${timelineWidth}px">${blocks.map(block =>
+    let html = `<div style="width:${fullWidth}px"><div class="sprint-header"><div class="sprint-left"><span>Location · stage · department · estimate</span><b>Priority</b></div><div class="sprint-track" style="width:${timelineWidth}px">${blocks.map(block =>
       `<div class="sprint-cell" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px"><b>${block.label}</b><small>${fmtShort(block.start)}–${fmtShort(block.end)}</small></div>`
     ).join('')}</div></div>`;
 
@@ -463,7 +463,7 @@
       })() : '';
       const statusCount = location.tasks.filter(task => task.status).length;
       const toggleLabel = `${collapsed ? 'Развернуть' : 'Свернуть'} этапы локации ${location.name}`;
-      html += `<div class="location-row${collapsed ? ' collapsed' : ''}${selected === location.id ? ' selected' : ''}" data-id="${location.id}" style="width:${fullWidth}px;height:${rowHeight}px"><div class="location-meta" style="height:${rowHeight}px"><div class="location-row-title"><div class="location-row-heading"><button class="location-toggle" type="button" data-location-toggle="${location.id}" aria-expanded="${!collapsed}" aria-label="${esc(toggleLabel)}" title="${esc(toggleLabel)}">${collapsed ? '▸' : '▾'}</button><strong>${esc(location.name)}</strong></div><span>${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} md · ${statusCount} status</span></div>${labels}</div><div class="location-timeline" style="width:${timelineWidth}px;height:${rowHeight}px">${grid}${totalBar}${laneLines}${bars}</div></div>`;
+      html += `<div class="location-row${collapsed ? ' collapsed' : ''}${selected === location.id ? ' selected' : ''}" data-id="${location.id}" style="width:${fullWidth}px;height:${rowHeight}px"><div class="location-meta" style="height:${rowHeight}px"><div class="location-row-title"><div class="location-row-heading"><button class="location-toggle" type="button" data-location-toggle="${location.id}" aria-expanded="${!collapsed}" aria-label="${esc(toggleLabel)}" title="${esc(toggleLabel)}">${collapsed ? '▸' : '▾'}</button><strong>${esc(location.name)}</strong></div><span class="location-priority priority ${location.priority}" title="CSO priority: ${esc(location.priorityDisplay)}">${esc(location.priorityDisplay)}</span><span class="location-stats">${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} md · ${statusCount} status</span></div>${labels}</div><div class="location-timeline" style="width:${timelineWidth}px;height:${rowHeight}px">${grid}${totalBar}${laneLines}${bars}</div></div>`;
     }
     html += '</div>';
     const gantt = document.getElementById('locationGantt');
@@ -522,7 +522,7 @@
         : 'нет';
       return `<div class="location-drawer-stage"><i class="sc ${task.departmentCss}"></i><div><strong>${esc(task.stageName)}</strong><small>${esc(task.department)} · ${task.estimate} mdays · ${esc(task.status || 'No status')}</small><span>${taskRange ? `${fmt(taskRange.start)} — ${fmt(taskRange.end)}` : 'Оценка отсутствует'}<br>Parallel people: ${task.maxParallelPeople === 0 ? 'unlimited' : task.maxParallelPeople}<br>Depends on: ${esc(dependenciesText)}</span></div></div>`;
     }).join('');
-    document.getElementById('locationDrawerBody').innerHTML = `<h3>${esc(location.name)}</h3><div class="dp">${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} mdays total</div>${stages}`;
+    document.getElementById('locationDrawerBody').innerHTML = `<h3>${esc(location.name)}</h3><div class="dp"><span class="location-priority priority ${location.priority}">${esc(location.priorityDisplay)}</span> · ${location.tasks.reduce((sum, task) => sum + task.estimate, 0)} mdays total</div>${stages}`;
     document.getElementById('locationDrawer').classList.add('open');
     renderGantt();
   }

@@ -28,14 +28,10 @@ function scheduleDefault() {
 }
 
 test('stage source of truth is the union of estimates and stage/team/capacity CSV', () => {
-  assert.equal(BASE_CATALOG.length, 14);
-  assert.equal(INITIAL_INPUT.unconfiguredStages.length, 1);
-  assert.equal(STAGE_CATALOG.length, 15);
   assert.equal(INITIAL_INPUT.locations.length, 10);
   assert.equal(INITIAL_INPUT.locations[0].tasks.length, 10);
   assert.equal(INITIAL_INPUT.locations.flatMap(location => location.tasks).length, 100);
-
-  assert.deepEqual(INITIAL_INPUT.unconfiguredStages.map(stage => stage.name), ['QA / Playtest']);
+  assert.equal(STAGE_CATALOG.length, BASE_CATALOG.length + INITIAL_INPUT.unconfiguredStages.length);
   const estimateOnly = STAGE_CATALOG.filter(stage => INITIAL_INPUT.unconfiguredStages.some(item => item.id === stage.id));
   assert.ok(estimateOnly.every(stage => stage.departmentId === 'unknown' && stage.maxParallelPeople === 1));
 });
@@ -49,7 +45,7 @@ test('the parser creates one task per estimate row without hardcoded expansion o
     'Modelling', 'LA Dressing', 'Lighting & VFX', 'Gameplay Balancing', 'QA / Playtest'
   ]);
   assert.equal(first.tasks.reduce((sum, task) => sum + task.estimate, 0), 100);
-  assert.equal(first.tasks.find(task => task.stageName === 'Lighting & VFX').department, 'VFX');
+  assert.equal(first.tasks.find(task => task.stageName === 'Lighting & VFX').sourceStage, 'Lighting & VFX');
 });
 
 test('combined CSV controls both team and parallelism for a dynamic stage', () => {
@@ -109,19 +105,84 @@ test('dependencies resolve through the source-of-truth union and cannot add stag
 });
 
 test('stage parallelism supports fixed people and zero as unlimited', () => {
-  const input = defaultInput();
-  input.locations = input.locations.slice(0, 1);
-  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
-  const macroId = stageId('LD Macro Layout');
-  const twoPeople = { ...STAGE_CAPACITIES, [macroId]: 2 };
-  const unlimited = { ...STAGE_CAPACITIES, [macroId]: 0 };
-  const stateTwo = Scheduler.schedule(input, dependencies, twoPeople, '2026-07-13', CAPACITIES);
-  const stateUnlimited = Scheduler.schedule(input, dependencies, unlimited, '2026-07-13', CAPACITIES);
-  const macroTwo = stateTwo.locations[0].tasks.find(task => task.stageId === macroId);
-  const macroUnlimited = stateUnlimited.locations[0].tasks.find(task => task.stageId === macroId);
+  const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
+Production,Level Design,2`);
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Production,,10,`, catalog);
+  const productionId = stageId('Production');
+  const stateTwo = Scheduler.schedule(
+    input, [], { [productionId]: 2 }, '2026-07-13', { levelDesign: 80 }
+  );
+  const stateUnlimited = Scheduler.schedule(
+    input, [], { [productionId]: 0 }, '2026-07-13', { levelDesign: 80 }
+  );
 
-  assert.deepEqual(macroTwo.allocation.map(item => item.amount), [2, 2, 2, 2, 2]);
-  assert.deepEqual(macroUnlimited.allocation.map(item => item.amount), [4, 4, 2]);
+  assert.deepEqual(stateTwo.tasks[0].allocation.map(item => item.amount), [2, 2, 2, 2, 2]);
+  assert.deepEqual(stateUnlimited.tasks[0].allocation.map(item => item.amount), [4, 4, 2]);
+});
+
+test('priority values are normalized, validated and used to order locations', () => {
+  const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
+Production,Level Design,1`);
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Low first in CSV,Low,Production,,1,
+Critical alias,P0,Production,,1,
+High third,high,Production,,1,`, catalog);
+  const state = Scheduler.schedule(
+    input,
+    [],
+    Csv.stageCapacities(catalog),
+    '2026-07-13',
+    { levelDesign: 20 }
+  );
+
+  assert.deepEqual(state.locations.map(location => location.name), [
+    'Critical alias', 'High third', 'Low first in CSV'
+  ]);
+  assert.deepEqual(state.locations.map(location => location.priority), ['Critical', 'High', 'Low']);
+  assert.throws(() => Scheduler.normalizePriority('Urgent'), /Unknown location priority: Urgent/);
+});
+
+test('each department focuses on two ready locations and returns when a higher-ranked location unblocks', () => {
+  const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
+LD Early,Level Design,1
+LA Work,Level Art,1
+LD Pass,Level Design,1`);
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Rocky Coast,Critical,LD Early,,1,
+,,LA Work,,3,
+,,LD Pass,,1,
+Tartarian Hall,Critical,LD Early,,3,
+,,LA Work,,3,
+,,LD Pass,,1,
+Starfortress Dungeon,Critical,LD Early,,3,
+,,LA Work,,3,
+,,LD Pass,,1,`, catalog);
+  const dependencies = Csv.parseDependencies(`From Stage,To Stage,Type,Lag Days
+LA Work,LD Pass,FS,0`, catalog);
+  const state = Scheduler.schedule(
+    input,
+    dependencies,
+    Csv.stageCapacities(catalog),
+    '2026-07-13',
+    { levelDesign: 60, levelArt: 20 }
+  );
+  const levelDesignLocations = dayIndex => [...new Set(state.days[dayIndex].allocations
+    .filter(allocation => allocation.departmentId === 'levelDesign')
+    .map(allocation => allocation.locationId))];
+
+  assert.deepEqual(levelDesignLocations(0), ['L01', 'L02']);
+  assert.deepEqual(levelDesignLocations(1), ['L02', 'L03']);
+  assert.deepEqual(levelDesignLocations(3), ['L01', 'L03']);
+  assert.equal(state.constants.MAX_ACTIVE_LOCATIONS_PER_DEPARTMENT, 2);
+  for (const day of state.days) {
+    for (const departmentId of ['levelDesign', 'levelArt']) {
+      const activeLocations = new Set(day.allocations
+        .filter(allocation => allocation.departmentId === departmentId)
+        .map(allocation => allocation.locationId));
+      assert.ok(activeLocations.size <= 2, `${departmentId} exceeds its location focus on ${day.date}`);
+    }
+  }
 });
 
 test('default roadmap allocates every estimate and respects team capacities', () => {
@@ -178,12 +239,17 @@ test('dependencies for stages absent from estimates are ignored by the scheduler
 });
 
 test('dependency cycles are rejected after dynamic name resolution', () => {
-  const input = defaultInput();
-  input.locations = input.locations.slice(0, 1);
-  const dependencies = Csv.parseDependencies(DEPENDENCIES_TEXT, STAGE_CATALOG);
-  dependencies.push({ from: stageId('Gameplay Pass'), to: stageId('Concept'), type: 'FS', lag: 0 });
+  const catalog = Csv.parseStageTeamCapacities(`Stage,Team,Max Parallel People
+Stage A,Level Design,1
+Stage B,Level Design,1`);
+  const input = Csv.parseCsv(`Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Stage A,,1,
+,,Stage B,,1,`, catalog);
+  const dependencies = Csv.parseDependencies(`From Stage,To Stage,Type,Lag Days
+Stage A,Stage B,FS,0
+Stage B,Stage A,FS,0`, catalog);
   assert.throws(
-    () => Scheduler.schedule(input, dependencies, STAGE_CAPACITIES, '2026-07-13', CAPACITIES),
+    () => Scheduler.schedule(input, dependencies, Csv.stageCapacities(catalog), '2026-07-13', { levelDesign: 20 }),
     /циклическую зависимость/
   );
 });

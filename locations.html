@@ -42,7 +42,7 @@
     <div class="section-head">
       <h2>Диаграмма Ганта по локациям</h2>
       <div class="section-head-actions">
-        <div class="hint">Спринт = 14 календарных / 10 рабочих дней · порядок локаций берётся из CSV</div>
+        <div class="hint">Спринт = 14 календарных / 10 рабочих дней · приоритет берётся из CSO/CSV</div>
         <button class="btn2 location-collapse-all" id="toggleAllLocationsButton" type="button">Свернуть все</button>
       </div>
     </div>
@@ -64,7 +64,8 @@
       4. Dependencies CSV может только связывать этапы из этого объединённого списка и не является источником новых этапов.<br>
       5. Approved и Work In Progress отображаются как статусы, но оценки включаются в production plan целиком.<br>
       6. Загруженные CSV сохраняются в браузере и автоматически восстанавливаются после обновления страницы.<br>
-      7. При конкуренции за одну команду выше стоит локация, расположенная раньше в estimates CSV.
+      7. Для каждого департамента независимо выбираются не более двух готовых локаций: сначала по Priority, затем по порядку в estimates CSV.<br>
+      8. Заблокированная локация освобождает focus-slot; когда её задача разблокируется, более высокий Priority автоматически возвращает её в работу.
     </div>
   </details>
   <div class="bottom"><button class="btn2" id="resetSavedCsvButton">Сбросить сохранённые CSV</button><button class="btn2" id="locationExportButton">Экспорт расписания CSV</button></div>
