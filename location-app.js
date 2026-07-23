@@ -541,6 +541,10 @@
     }
   }
 
+  function setDefaultRoadmapStart() {
+    document.getElementById('locationStartDate').value = Scheduler.dateKey(Scheduler.nextSprintMonday());
+  }
+
   function csvCell(value) {
     return `"${String(value ?? '').replaceAll('"', '""')}"`;
   }
@@ -580,6 +584,7 @@
   }
 
   renderControls();
+  setDefaultRoadmapStart();
   document.getElementById('locationRecalcButton').addEventListener('click', recalculate);
   document.getElementById('locationSearch').addEventListener('input', renderGantt);
   document.getElementById('toggleAllLocationsButton').addEventListener('click', toggleAllLocations);

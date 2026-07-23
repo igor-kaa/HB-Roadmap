@@ -15,6 +15,13 @@ const DEFAULT_CAPACITIES = {
   perFeature: 20
 };
 
+test('nextSprintMonday selects the current or next sprint start', () => {
+  assert.equal(Scheduler.dateKey(Scheduler.nextSprintMonday(new Date(2026, 6, 21, 12))), '2026-07-27');
+  assert.equal(Scheduler.dateKey(Scheduler.nextSprintMonday(new Date(2026, 6, 23, 12))), '2026-07-27');
+  assert.equal(Scheduler.dateKey(Scheduler.nextSprintMonday(new Date(2026, 6, 20, 12))), '2026-07-20');
+  assert.equal(Scheduler.dateKey(Scheduler.nextSprintMonday(new Date(2026, 6, 26, 12))), '2026-07-27');
+});
+
 function loadBaseline() {
   const csv = fs.readFileSync(path.join(ROOT, 'VS RoadMap Data (Igor K).csv'), 'utf8');
   const features = Csv.parseCsv(csv);

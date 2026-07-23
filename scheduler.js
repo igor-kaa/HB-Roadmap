@@ -1,5 +1,5 @@
 /* Hyperborea Roadmap Scheduling Engine v4.1 — two-week sprints.
- * Default roadmap start: 2026-07-13 (Monday).
+ * The default roadmap start is the current or next Monday.
  * Default GD availability month: 2026-07.
  * Capacity inputs remain monthly planning values and are converted using
  * 20 working days/month. Therefore every 10-workday sprint receives half.
@@ -24,7 +24,7 @@
   const CALENDAR_DAYS_PER_SPRINT = 14;
   const SPRINT_NUMBER_BASE = '2025-11-17';
   const DEFAULTS = Object.freeze({
-    roadmapStart: '2026-07-13',
+    roadmapStart: dateKey(nextSprintMonday()),
     gdAvailabilityMonth: '2026-07',
     designCapacity: 60,
     devCapacity: 100,
@@ -63,6 +63,13 @@
     const start = new Date(a.getFullYear(), a.getMonth(), a.getDate());
     const end = new Date(b.getFullYear(), b.getMonth(), b.getDate());
     return Math.round((end - start) / 86400000);
+  }
+
+  function nextSprintMonday(date = new Date()) {
+    const result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+    const daysUntilMonday = (8 - result.getDay()) % 7;
+    result.setDate(result.getDate() + daysUntilMonday);
+    return result;
   }
 
   function sprintIndexForDate(startDate, date) {
@@ -314,6 +321,6 @@
   return {
     DEFAULTS,
     schedule, normalizePriority, parseDate, parseMonth, dateKey, addDays, daysBetween,
-    sprintIndexForDate, sprintKey, firstWorkdayOnOrAfter
+    sprintIndexForDate, sprintKey, firstWorkdayOnOrAfter, nextSprintMonday
   };
 });

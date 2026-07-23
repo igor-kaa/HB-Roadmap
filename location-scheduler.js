@@ -39,6 +39,13 @@
     return Math.round((end - start) / 86400000);
   }
 
+  function nextSprintMonday(date = new Date()) {
+    const result = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+    const daysUntilMonday = (8 - result.getDay()) % 7;
+    result.setDate(result.getDate() + daysUntilMonday);
+    return result;
+  }
+
   function sprintIndexForDate(startDate, date) {
     return Math.max(0, Math.floor(daysBetween(startDate, date) / CALENDAR_DAYS_PER_SPRINT));
   }
@@ -248,6 +255,7 @@
     dateKey,
     addDays,
     daysBetween,
-    sprintIndexForDate
+    sprintIndexForDate,
+    nextSprintMonday
   };
 });

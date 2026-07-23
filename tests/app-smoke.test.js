@@ -65,6 +65,11 @@ test('index is file:// compatible and waits for a gameplay CSV', async () => {
     { filename: 'app.js' }
   );
 
+  const expectedStart = Scheduler.nextSprintMonday();
+  const expectedSprint = Math.floor(
+    Scheduler.daysBetween(new Date(2025, 10, 17, 12), expectedStart) / 14
+  ) + 1;
+  assert.equal(element('startDate').value, Scheduler.dateKey(expectedStart));
   assert.match(element('summary').innerHTML, /Gameplay CSV/);
   assert.match(element('gantt').innerHTML, /Ожидание gameplay CSV/);
 
@@ -77,5 +82,5 @@ test('index is file:// compatible and waits for a gameplay CSV', async () => {
 
   assert.match(element('summary').innerHTML, />2</);
   assert.match(element('gantt').innerHTML, /Feature A/);
-  assert.match(element('gantt').innerHTML, /Sprint 18/);
+  assert.match(element('gantt').innerHTML, new RegExp(`Sprint ${expectedSprint}`));
 });

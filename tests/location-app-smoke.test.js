@@ -86,6 +86,7 @@ Test Location,High,Art: Concept Global,Approved,2,
   };
 
   vm.runInNewContext(read('location-app.js'), context, { filename: 'location-app.js' });
+  assert.equal(element('locationStartDate').value, Scheduler.dateKey(Scheduler.nextSprintMonday()));
   assert.match(element('capacityInputs').innerHTML, /Game Design/);
   assert.match(element('capacityInputs').innerHTML, /Narrative/);
   assert.match(element('capacityInputs').innerHTML, /VFX/);

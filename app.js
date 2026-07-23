@@ -270,6 +270,10 @@
     }
   }
 
+  function setDefaultRoadmapStart() {
+    document.getElementById('startDate').value = S.dateKey(S.nextSprintMonday());
+  }
+
   function csvCell(value) {
     return `"${String(value ?? '').replaceAll('"', '""')}"`;
   }
@@ -306,6 +310,7 @@
     URL.revokeObjectURL(url);
   }
 
+  setDefaultRoadmapStart();
   document.getElementById('recalcButton').addEventListener('click', recalculateSchedule);
   document.getElementById('search').addEventListener('input', () => { if (state) renderGantt(); });
   document.getElementById('priority').addEventListener('change', () => { if (state) renderGantt(); });

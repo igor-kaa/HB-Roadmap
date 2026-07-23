@@ -25,6 +25,10 @@ const STAGE_CAPACITIES = Csv.stageCapacities(STAGE_CATALOG);
 const CAPACITIES = Object.fromEntries(Csv.DEPARTMENTS.map(department => [department.id, department.defaultCapacity]));
 const stageId = name => Csv.stageIdForName(name);
 
+test('nextSprintMonday selects the current or next sprint start', () => {
+  assert.equal(Scheduler.dateKey(Scheduler.nextSprintMonday(new Date(2026, 6, 23, 12))), '2026-07-27');
+});
+
 function defaultInput() {
   return Csv.parseCsv(ESTIMATES_TEXT, STAGE_CATALOG);
 }
