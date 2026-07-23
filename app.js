@@ -6,10 +6,13 @@
   const MIN_DAY_WIDTH = 3.65;
   const LEFT = 410;
   const TIMELINE_GUTTER = 18;
+  const FEATURE_ROW_HEIGHT = 90;
+  const FEATURE_COLLAPSED_HEIGHT = 46;
   const SPRINT_NUMBER_BASE = new Date(2025, 10, 17, 12);
   let rawFeatures = null;
   let state = null;
   let selected = null;
+  const collapsedFeatures = new Set();
 
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({
@@ -52,6 +55,17 @@
     }
     output.push({ start, end: previous });
     return output;
+  }
+
+  function featureRange(feature) {
+    const indexes = ['gdAlloc', 'devAlloc', 'animAlloc', 'tdAlloc']
+      .flatMap(key => feature[key].map(item => item.index));
+    return indexes.length
+      ? {
+          start: state.days[Math.min(...indexes)].date,
+          end: state.days[Math.max(...indexes)].date
+        }
+      : null;
   }
 
   function sprintBlocks() {
@@ -130,38 +144,68 @@
 
     if (!visible.length) {
       document.getElementById('gantt').innerHTML = html + '<div class="empty">Нет фич по фильтру</div></div>';
+      updateCollapseAllButton();
       return;
     }
 
     for (const feature of visible) {
+      const collapsed = collapsedFeatures.has(String(feature.id));
+      const rowHeight = collapsed ? FEATURE_COLLAPSED_HEIGHT : FEATURE_ROW_HEIGHT;
       const grid = blocks.map(block =>
-        `<div class="grid-sprint" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px"></div>`
+        `<div class="grid-sprint" style="left:${block.left * dayWidth}px;width:${block.width * dayWidth}px;height:${rowHeight}px"></div>`
       ).join('');
       let bars = '';
-      for (const stage of [
-        { key: 'gdAlloc', css: 'gd', name: 'GD', estimate: feature.gd },
-        { key: 'devAlloc', css: 'dev', name: 'DEV', estimate: feature.dev },
-        { key: 'animAlloc', css: 'anim', name: 'ANIM', estimate: feature.anim },
-        { key: 'tdAlloc', css: 'td', name: 'TD', estimate: feature.td }
-      ]) {
-        const stageRange = range(feature, stage.key);
-        for (const segment of segments(feature[stage.key])) {
-          const start = state.days[segment.start].date;
-          const end = S.addDays(state.days[segment.end].date, 1);
-          const left = S.daysBetween(state.startDate, start) * dayWidth;
-          const width = Math.max(3, S.daysBetween(start, end) * dayWidth);
-          bars += `<div class="bar ${stage.css}" style="left:${left}px;width:${width}px" title="${stage.name}: ${stage.estimate} mdays · ${fmt(stageRange.start)} — ${fmt(stageRange.end)}"></div>`;
+      if (!collapsed) {
+        for (const stage of [
+          { key: 'gdAlloc', css: 'gd', name: 'GD', estimate: feature.gd },
+          { key: 'devAlloc', css: 'dev', name: 'DEV', estimate: feature.dev },
+          { key: 'animAlloc', css: 'anim', name: 'ANIM', estimate: feature.anim },
+          { key: 'tdAlloc', css: 'td', name: 'TD', estimate: feature.td }
+        ]) {
+          const stageRange = range(feature, stage.key);
+          for (const segment of segments(feature[stage.key])) {
+            const start = state.days[segment.start].date;
+            const end = S.addDays(state.days[segment.end].date, 1);
+            const left = S.daysBetween(state.startDate, start) * dayWidth;
+            const width = Math.max(3, S.daysBetween(start, end) * dayWidth);
+            bars += `<div class="bar ${stage.css}" style="left:${left}px;width:${width}px" title="${stage.name}: ${stage.estimate} mdays · ${fmt(stageRange.start)} — ${fmt(stageRange.end)}"></div>`;
+          }
         }
       }
-      html += `<div class="feature-row ${selected === feature.id ? 'selected' : ''}" data-id="${esc(feature.id)}" style="width:${fullWidth}px"><div class="meta"><div class="name" title="${esc(feature.name)}"><span class="pid">#${esc(feature.id)}</span> ${esc(feature.name)}</div><div class="meta2"><span class="priority ${feature.priority}">${esc(feature.priorityDisplay)}</span><span class="egd">GD ${feature.gd}</span><span class="edev">DEV ${feature.dev}</span><span class="eanim">ANIM ${feature.anim}</span><span class="etd">TD ${feature.td}</span>${feature.gd > 0 ? '<span class="blocked-note">GD gate</span>' : ''}</div></div><div class="timeline" style="width:${timelineWidth}px">${grid}<div class="gd-gate" style="left:0;width:${gdGateLeft}px"></div><div class="lane l1"></div><div class="lane l2"></div><div class="lane l3"></div>${bars}</div></div>`;
+      const totalRange = featureRange(feature);
+      const totalBar = collapsed && totalRange ? (() => {
+        const endExclusive = S.addDays(totalRange.end, 1);
+        const left = S.daysBetween(state.startDate, totalRange.start) * dayWidth;
+        const duration = S.daysBetween(totalRange.start, endExclusive);
+        const width = Math.max(3, duration * dayWidth);
+        return `<div class="bar feature-total-bar" style="left:${left}px;width:${width}px" title="${esc(feature.name)} · весь цикл · ${fmt(totalRange.start)} — ${fmt(totalRange.end)}"><span>Весь цикл · ${duration} дн.</span></div>`;
+      })() : '';
+      const toggleLabel = `${collapsed ? 'Развернуть' : 'Свернуть'} этапы фичи ${feature.name}`;
+      html += `<div class="feature-row${collapsed ? ' collapsed' : ''}${String(selected) === String(feature.id) ? ' selected' : ''}" data-id="${esc(feature.id)}" style="width:${fullWidth}px;height:${rowHeight}px"><div class="meta" style="height:${rowHeight}px"><div class="feature-row-heading"><button class="feature-toggle" type="button" data-feature-toggle="${esc(feature.id)}" aria-expanded="${!collapsed}" aria-label="${esc(toggleLabel)}" title="${esc(toggleLabel)}">${collapsed ? '▸' : '▾'}</button><div class="name" title="${esc(feature.name)}"><span class="pid">#${esc(feature.id)}</span> ${esc(feature.name)}</div></div><div class="meta2"><span class="priority ${feature.priority}">${esc(feature.priorityDisplay)}</span><span class="egd">GD ${feature.gd}</span><span class="edev">DEV ${feature.dev}</span><span class="eanim">ANIM ${feature.anim}</span><span class="etd">TD ${feature.td}</span>${feature.gd > 0 ? '<span class="blocked-note">GD gate</span>' : ''}</div></div><div class="timeline" style="width:${timelineWidth}px;height:${rowHeight}px">${grid}<div class="gd-gate" style="left:0;width:${gdGateLeft}px;height:${rowHeight}px"></div>${collapsed ? '' : '<div class="lane l1"></div><div class="lane l2"></div><div class="lane l3"></div>'}${totalBar}${bars}</div></div>`;
     }
 
     html += '</div>';
     const gantt = document.getElementById('gantt');
     gantt.innerHTML = html;
-    gantt.querySelectorAll('.feature-row').forEach(row => {
-      row.onclick = () => openDrawer(row.dataset.id);
-    });
+    updateCollapseAllButton();
+  }
+
+  function updateCollapseAllButton() {
+    const button = document.getElementById('toggleAllFeaturesButton');
+    if (!button) return;
+    const allCollapsed = state && state.features.length > 0 &&
+      state.features.every(feature => collapsedFeatures.has(String(feature.id)));
+    button.disabled = !state || !state.features.length;
+    button.textContent = allCollapsed ? 'Развернуть все' : 'Свернуть все';
+    button.setAttribute('aria-label', allCollapsed ? 'Развернуть этапы всех фич' : 'Свернуть этапы всех фич');
+  }
+
+  function toggleAllFeatures() {
+    if (!state || !state.features.length) return;
+    const allCollapsed = state.features.every(feature => collapsedFeatures.has(String(feature.id)));
+    if (allCollapsed) collapsedFeatures.clear();
+    else state.features.forEach(feature => collapsedFeatures.add(String(feature.id)));
+    renderGantt();
   }
 
   function capacityRow(name, detail, used, total, parts) {
@@ -234,6 +278,7 @@
     document.getElementById('summary').innerHTML = '<div class="card"><div class="cl">Gameplay CSV</div><div class="cv">Не загружен</div><div class="cn">Выберите CSV с оценками фич</div></div>';
     document.getElementById('gantt').innerHTML = '<div class="empty">Ожидание gameplay CSV</div>';
     document.getElementById('capacity').innerHTML = '';
+    updateCollapseAllButton();
   }
 
   function recalculateSchedule() {
@@ -267,6 +312,7 @@
       document.getElementById('summary').innerHTML = `<div class="card error-card"><div class="cl">Ошибка расчёта</div><div class="cn">${esc(error.message)}</div></div>`;
       document.getElementById('gantt').innerHTML = `<div class="empty">${esc(error.message)}</div>`;
       document.getElementById('capacity').innerHTML = '';
+      updateCollapseAllButton();
     }
   }
 
@@ -312,6 +358,21 @@
 
   setDefaultRoadmapStart();
   document.getElementById('recalcButton').addEventListener('click', recalculateSchedule);
+  document.getElementById('toggleAllFeaturesButton').addEventListener('click', toggleAllFeatures);
+  document.getElementById('gantt').addEventListener('click', event => {
+    const target = event.target && typeof event.target.closest === 'function' ? event.target : null;
+    if (!target) return;
+    const toggle = target.closest('[data-feature-toggle]');
+    if (toggle) {
+      const featureId = String(toggle.dataset.featureToggle);
+      if (collapsedFeatures.has(featureId)) collapsedFeatures.delete(featureId);
+      else collapsedFeatures.add(featureId);
+      renderGantt();
+      return;
+    }
+    const row = target.closest('.feature-row');
+    if (row) openDrawer(row.dataset.id);
+  });
   document.getElementById('search').addEventListener('input', () => { if (state) renderGantt(); });
   document.getElementById('priority').addEventListener('change', () => { if (state) renderGantt(); });
   document.getElementById('closeDrawerButton').addEventListener('click', () => {
@@ -328,6 +389,7 @@
       const file = event.target.files && event.target.files[0];
       if (!file) return;
       rawFeatures = Csv.parseCsv(await file.text());
+      collapsedFeatures.clear();
       recalculateSchedule();
     } catch (error) {
       console.error(error);

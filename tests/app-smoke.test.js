@@ -16,6 +16,7 @@ test('index is file:// compatible and waits for a gameplay CSV', async () => {
   assert.doesNotMatch(html, /type=["']module["']/i);
   assert.ok(html.indexOf('id="csvFile"') < html.indexOf('id="recalcButton"'));
   assert.match(html, /file-label-primary/);
+  assert.match(html, /id="toggleAllFeaturesButton"/);
 
   const elements = new Map();
   const values = {
@@ -36,8 +37,11 @@ test('index is file:// compatible and waits for a gameplay CSV', async () => {
         clientWidth: id === 'ganttShell' ? 1440 : 0,
         innerHTML: '',
         files: [],
+        disabled: false,
+        attributes: {},
         listeners: {},
         addEventListener(type, listener) { this.listeners[type] = listener; },
+        setAttribute(name, value) { this.attributes[name] = value; },
         querySelectorAll() { return []; },
         classList: { add() {}, remove() {} }
       });
@@ -83,4 +87,22 @@ test('index is file:// compatible and waits for a gameplay CSV', async () => {
   assert.match(element('summary').innerHTML, />2</);
   assert.match(element('gantt').innerHTML, /Feature A/);
   assert.match(element('gantt').innerHTML, new RegExp(`Sprint ${expectedSprint}`));
+  assert.match(element('gantt').innerHTML, /data-feature-toggle="1"/);
+  assert.doesNotMatch(element('gantt').innerHTML, /feature-total-bar/);
+
+  element('toggleAllFeaturesButton').listeners.click();
+  assert.equal(element('toggleAllFeaturesButton').innerHTML || element('toggleAllFeaturesButton').textContent, 'Развернуть все');
+  assert.match(element('gantt').innerHTML, /feature-row collapsed/);
+  assert.match(element('gantt').innerHTML, /feature-total-bar/);
+  assert.doesNotMatch(element('gantt').innerHTML, /class="bar gd"/);
+
+  element('toggleAllFeaturesButton').listeners.click();
+  assert.doesNotMatch(element('gantt').innerHTML, /feature-row collapsed/);
+  const featureToggleTarget = {
+    dataset: { featureToggle: '1' },
+    closest(selector) { return selector === '[data-feature-toggle]' ? this : null; }
+  };
+  element('gantt').listeners.click({ target: featureToggleTarget });
+  assert.match(element('gantt').innerHTML, /feature-row collapsed/);
+  assert.match(element('gantt').innerHTML, /feature-total-bar/);
 });
