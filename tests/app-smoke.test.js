@@ -9,7 +9,7 @@ const Csv = require('../csv.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
-test('index is file:// compatible and the browser app boots without a backend', () => {
+test('index is file:// compatible and waits for a gameplay CSV', async () => {
   const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(match => match[1]);
   assert.deepEqual(scripts, ['csv.js', 'scheduler.js', 'app.js']);
@@ -36,7 +36,8 @@ test('index is file:// compatible and the browser app boots without a backend', 
         clientWidth: id === 'ganttShell' ? 1440 : 0,
         innerHTML: '',
         files: [],
-        addEventListener() {},
+        listeners: {},
+        addEventListener(type, listener) { this.listeners[type] = listener; },
         querySelectorAll() { return []; },
         classList: { add() {}, remove() {} }
       });
@@ -64,9 +65,17 @@ test('index is file:// compatible and the browser app boots without a backend', 
     { filename: 'app.js' }
   );
 
-  assert.match(element('summary').innerHTML, />43</);
-  assert.match(element('summary').innerHTML, /09 дек\. 2026 г\./);
+  assert.match(element('summary').innerHTML, /Gameplay CSV/);
+  assert.match(element('gantt').innerHTML, /Ожидание gameplay CSV/);
+
+  const csv = `ID,Feature name,Priority,August Build,Dev,GD,TD,Anim
+1,Feature A,Critical,No,5,1,1,0
+2,Feature B,High,No,3,0,0,2`;
+  await element('csvFile').listeners.change({
+    target: { files: [{ text: async () => csv }] }
+  });
+
+  assert.match(element('summary').innerHTML, />2</);
+  assert.match(element('gantt').innerHTML, /Feature A/);
   assert.match(element('gantt').innerHTML, /Sprint 18/);
-  assert.match(element('gantt').innerHTML, /Sprint 28/);
-  assert.match(element('gantt').innerHTML, /<div style="width:1422px">/);
 });

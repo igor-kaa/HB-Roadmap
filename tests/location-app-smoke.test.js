@@ -12,7 +12,10 @@ const read = filename => fs.readFileSync(path.join(ROOT, filename), 'utf8');
 test('locations page loads external CSV sources and persists the unified stage catalog', async () => {
   const html = read('locations.html');
   const index = read('index.html');
-  const estimatesText = read('location-estimates.csv');
+  const estimatesText = `Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
+Test Location,High,Art: Concept Global,Approved,2,
+,,Art: Concept Arts,In Progress,2,
+,,Art: Additional Concept,Not Started,2,`;
   const catalogText = read('location-stage-team-capacity.csv');
   const scripts = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map(match => match[1]);
   assert.deepEqual(scripts, ['location-csv.js', 'location-scheduler.js', 'location-app.js']);
@@ -24,6 +27,7 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.doesNotMatch(html, /stageCapacityCsvFile|stageTeamsCsvFile/);
   assert.match(html, /id="dependencyGraphDialog"/);
   assert.match(html, /id="toggleAllLocationsButton"/);
+  assert.doesNotMatch(html, /resetSavedCsvButton/);
   assert.match(index, /href="locations\.html"/);
 
   const elements = new Map();
@@ -86,11 +90,17 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('capacityInputs').innerHTML, /Narrative/);
   assert.match(element('capacityInputs').innerHTML, /VFX/);
   assert.match(element('capacityInputs').innerHTML, /Concept Art/);
-  assert.match(element('locationSummary').innerHTML, />10</);
-  assert.match(element('locationSummary').innerHTML, /1000 mdays/);
+  assert.match(element('locationSummary').innerHTML, /Estimates CSV/);
+  assert.match(element('locationGantt').innerHTML, /Ожидание estimates CSV/);
+
+  await element('locationsCsvFile').listeners.change({
+    target: { files: [{ name: 'test-estimates.csv', text: async () => estimatesText }] }
+  });
+  assert.match(element('locationSummary').innerHTML, />1</);
+  assert.match(element('locationSummary').innerHTML, /6 mdays/);
   assert.match(element('locationSummary').innerHTML, /Stage catalog/);
-  assert.match(element('locationGantt').innerHTML, /Beach \(Rocky Coast\)/);
-  assert.match(element('locationGantt').innerHTML, /Lighting &amp; VFX/);
+  assert.match(element('locationGantt').innerHTML, /Test Location/);
+  assert.match(element('locationGantt').innerHTML, /Art: Concept Global/);
   assert.match(element('locationGantt').innerHTML, /data-location-toggle=/);
   assert.match(element('locationGantt').innerHTML, /location-total-bar/);
   assert.match(element('locationGantt').innerHTML, /Весь цикл/);
@@ -109,22 +119,26 @@ test('locations page loads external CSV sources and persists the unified stage c
   };
   element('locationGantt').listeners.click({ target: individualToggle });
   assert.match(element('locationGantt').innerHTML, new RegExp(`location-row collapsed[^>]+data-id="${firstLocationId}"[^>]+height:36px`));
-  assert.equal(element('toggleAllLocationsButton').textContent, 'Свернуть все');
+  assert.equal(element('toggleAllLocationsButton').textContent, 'Развернуть все');
   element('locationGantt').listeners.click({ target: individualToggle });
   assert.doesNotMatch(element('locationGantt').innerHTML, /location-row collapsed/);
   assert.match(element('locationSummary').innerHTML, /id="dependencySummaryCard"/);
   element('dependencySummaryCard').listeners.click();
   assert.match(element('dependencyGraph').innerHTML, /Stage dependency graph/);
-  assert.match(element('dependencyGraph').innerHTML, /Concept/);
-  assert.match(element('dependencyGraph').innerHTML, /dependency-edge-ff/);
-  assert.match(element('dependencyGraph').innerHTML, />FF</);
+  assert.match(element('dependencyGraph').innerHTML, /Art: Concept Global/);
+  assert.match(element('dependencyGraph').innerHTML, /dependency-edge-fs/);
 
-  const customCatalog = catalogText.replace('Concept,Concept Art,1', 'Concept,Concept Art,0');
+  const customCatalog = catalogText + '\nUnlimited Stage,Concept Art,0';
   await element('stageTeamCapacityCsvFile').listeners.change({
     target: { files: [{ name: 'custom-stage-catalog.csv', text: async () => customCatalog }] }
   });
   assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /custom-stage-catalog\.csv/);
   assert.match(element('locationSummary').innerHTML, /custom-stage-catalog\.csv/);
+
+  const estimateWithConfiguredStage = estimatesText + '\n,,Unlimited Stage,,10,';
+  await element('locationsCsvFile').listeners.change({
+    target: { files: [{ name: 'configured-stage-estimates.csv', text: async () => estimateWithConfiguredStage }] }
+  });
   assert.match(element('locationGantt').innerHTML, /unlimited/);
 
   const estimateWithNewStage = estimatesText + '\n,,New Review Stage,,10,';
@@ -148,12 +162,9 @@ test('locations page loads external CSV sources and persists the unified stage c
   assert.match(element('locationSummary').innerHTML, /reassigned-stage-catalog\.csv/);
   assert.match(element('locationGantt').innerHTML, /New Review Stage/);
 
-  element('resetSavedCsvButton').listeners.click();
-  assert.equal(stored.size, 0);
-  assert.match(element('locationSummary').innerHTML, /location-stage-team-capacity\.csv/);
 });
 
-test('blocked file:// default requests do not prevent an estimates upload from bootstrapping the page', async () => {
+test('blocked file:// configuration requests do not prevent an estimates upload from bootstrapping the page', async () => {
   const elements = new Map();
   function element(id) {
     if (!elements.has(id)) {
@@ -208,6 +219,13 @@ test('blocked file:// default requests do not prevent an estimates upload from b
   assert.match(element('locationGantt').innerHTML, /Ожидание estimates CSV/);
   assert.equal(typeof element('locationsCsvFile').listeners.change, 'function');
 
+  const catalog = `Stage,Team,Max Parallel People
+Stage From Upload,Level Design,1`;
+  await element('stageTeamCapacityCsvFile').listeners.change({
+    target: { files: [{ name: 'uploaded-stage-catalog.csv', text: async () => catalog }] }
+  });
+  assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /uploaded-stage-catalog\.csv/);
+
   const estimates = `Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
 Test Location,High,Stage From Upload,Not Started,2,`;
   await element('locationsCsvFile').listeners.change({
@@ -233,5 +251,5 @@ Test Location,High,Stage From Upload,Not Started,2,`;
   assert.doesNotMatch(element('locationGantt').innerHTML, /location-stage-label/);
   element('locationGantt').listeners.click({ target: toggleTarget });
   assert.match(element('locationGantt').innerHTML, /location-stage-label/);
-  assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /Stage From Upload,Unknown,1/);
+  assert.match(stored.get('hyperborea.locations.stage-team-capacity.v1'), /Stage From Upload,Level Design,1/);
 });

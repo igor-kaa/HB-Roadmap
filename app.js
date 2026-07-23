@@ -7,7 +7,7 @@
   const LEFT = 410;
   const TIMELINE_GUTTER = 18;
   const SPRINT_NUMBER_BASE = new Date(2025, 10, 17, 12);
-  let rawFeatures = Csv.parseCsv(Csv.DEFAULT_CSV);
+  let rawFeatures = null;
   let state = null;
   let selected = null;
 
@@ -227,7 +227,20 @@
     renderGantt();
   }
 
+  function renderAwaitingCsv() {
+    state = null;
+    selected = null;
+    document.getElementById('drawer').classList.remove('open');
+    document.getElementById('summary').innerHTML = '<div class="card"><div class="cl">Gameplay CSV</div><div class="cv">Не загружен</div><div class="cn">Выберите CSV с оценками фич</div></div>';
+    document.getElementById('gantt').innerHTML = '<div class="empty">Ожидание gameplay CSV</div>';
+    document.getElementById('capacity').innerHTML = '';
+  }
+
   function recalculateSchedule() {
+    if (!rawFeatures) {
+      renderAwaitingCsv();
+      return;
+    }
     try {
       const capacities = {
         design: +document.getElementById('designCap').value,
@@ -262,6 +275,10 @@
   }
 
   function exportCsv() {
+    if (!state) {
+      alert('Сначала загрузите gameplay CSV');
+      return;
+    }
     const header = ['ID', 'Feature name', 'Priority', 'GD estimate', 'GD start', 'GD finish', 'Dev estimate', 'Dev start', 'Dev finish', 'Anim estimate', 'Anim start', 'Anim finish', 'TD estimate', 'TD start', 'TD finish', 'Feature finish'];
     const lines = [header.map(csvCell).join(',')];
     for (const feature of state.features) {
@@ -290,16 +307,16 @@
   }
 
   document.getElementById('recalcButton').addEventListener('click', recalculateSchedule);
-  document.getElementById('search').addEventListener('input', renderGantt);
-  document.getElementById('priority').addEventListener('change', renderGantt);
+  document.getElementById('search').addEventListener('input', () => { if (state) renderGantt(); });
+  document.getElementById('priority').addEventListener('change', () => { if (state) renderGantt(); });
   document.getElementById('closeDrawerButton').addEventListener('click', () => {
     selected = null;
     document.getElementById('drawer').classList.remove('open');
-    renderGantt();
+    if (state) renderGantt();
   });
   document.getElementById('exportButton').addEventListener('click', exportCsv);
   if (typeof window !== 'undefined') {
-    window.addEventListener('resize', renderGantt);
+    window.addEventListener('resize', () => { if (state) renderGantt(); });
   }
   document.getElementById('csvFile').addEventListener('change', async event => {
     try {

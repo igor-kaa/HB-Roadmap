@@ -15,7 +15,6 @@
   const DEPENDENCY_ROW_GAP = 22;
   const DEPENDENCY_GRAPH_PADDING = 28;
   const DEFAULT_FILES = Object.freeze({
-    estimates: 'location-estimates.csv',
     dependencies: 'location-dependencies.csv',
     stageCatalog: 'location-stage-team-capacity.csv'
   });
@@ -24,15 +23,11 @@
     dependencies: 'hyperborea.locations.dependencies.v1',
     stageCatalog: 'hyperborea.locations.stage-team-capacity.v1'
   });
-  const LEGACY_STORAGE_KEYS = Object.freeze([
-    'hyperborea.locations.stage-capacities.v1',
-    'hyperborea.locations.stage-teams.v1'
-  ]);
   const browserStorage = getBrowserStorage();
   const defaultTexts = Object.fromEntries(Object.entries(DEFAULT_FILES).map(([key, filename]) => [key, loadExternalCsv(filename)]));
   const restoredStageCatalog = restoreCsv(STORAGE_KEYS.stageCatalog, Csv.parseStageTeamCapacities, defaultTexts.stageCatalog, DEFAULT_FILES.stageCatalog);
   let stageCatalog = restoredStageCatalog.value || [];
-  const restoredInput = restoreCsv(STORAGE_KEYS.estimates, text => Csv.parseCsv(text, stageCatalog), defaultTexts.estimates, DEFAULT_FILES.estimates);
+  const restoredInput = restoreCsv(STORAGE_KEYS.estimates, text => Csv.parseCsv(text, stageCatalog), '', '');
   let input = restoredInput.value;
   let estimatesText = restoredInput.text;
   if (input) stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
@@ -65,7 +60,7 @@
         return request.responseText;
       }
     } catch (error) {
-      console.warn(`Default CSV is unavailable: ${filename}`, error);
+      console.warn(`Configuration CSV is unavailable: ${filename}`, error);
     }
     return '';
   }
@@ -126,30 +121,6 @@
       console.warn(`CSV could not be saved: ${key}`, error);
       return false;
     }
-  }
-
-  function resetSavedCsv() {
-    if (browserStorage) {
-      for (const key of [...Object.values(STORAGE_KEYS), ...LEGACY_STORAGE_KEYS]) {
-        try { browserStorage.removeItem(key); } catch (error) { /* storage unavailable */ }
-      }
-    }
-    stageCatalog = defaultTexts.stageCatalog ? Csv.parseStageTeamCapacities(defaultTexts.stageCatalog) : [];
-    input = defaultTexts.estimates ? Csv.parseCsv(defaultTexts.estimates, stageCatalog) : null;
-    estimatesText = defaultTexts.estimates;
-    if (input) stageCatalog = Csv.mergeStageTeamCapacities(stageCatalog, input.unconfiguredStages);
-    dependenciesText = {
-      name: defaultTexts.dependencies ? DEFAULT_FILES.dependencies : 'Not loaded',
-      text: defaultTexts.dependencies
-    };
-    dependencies = dependenciesForCurrentCatalog(false);
-    stageCapacities = Csv.stageCapacities(stageCatalog);
-    csvSources = {
-      estimates: defaultTexts.estimates ? DEFAULT_FILES.estimates : 'Not loaded',
-      dependencies: dependenciesText.name,
-      stageCatalog: defaultTexts.stageCatalog ? DEFAULT_FILES.stageCatalog : 'Not loaded'
-    };
-    recalculate();
   }
 
   function esc(value) {
@@ -403,7 +374,7 @@
   }
 
   function warnUnconfiguredStages(parsed) {
-    if (parsed.unconfiguredStages.length) {
+    if (parsed && parsed.unconfiguredStages.length) {
       alert(`Этапы из estimates добавлены в stage catalog: ${parsed.unconfiguredStages.map(stage => stage.name).join(', ')}. Для них назначены Unknown team и 1 parallel person.`);
     }
   }
@@ -628,7 +599,6 @@
   });
   document.getElementById('locationExportButton').addEventListener('click', exportCsv);
   document.getElementById('stageTeamCapacityExportButton').addEventListener('click', exportStageTeamCapacities);
-  document.getElementById('resetSavedCsvButton').addEventListener('click', resetSavedCsv);
   document.getElementById('locationCloseDrawerButton').addEventListener('click', () => {
     selected = null;
     document.getElementById('locationDrawer').classList.remove('open');

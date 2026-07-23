@@ -21,7 +21,7 @@ ID,Feature name,Priority,August Build,Dev,GD,TD,Anim
 
 ### Источники данных
 
-Estimates хранятся в `location-estimates.csv` и имеют формат:
+Estimates загружаются пользователем через интерфейс и имеют формат:
 
 ```csv
 Location & Filler Space,Priority,Stage,Status,Est. Days,Notes
@@ -66,11 +66,11 @@ Dependencies CSV не является источником этапов: обе
 
 ### Capacity и сохранение
 
-Месячные мощности команд задаются на странице. Значения по умолчанию: Game Design — 20, Narrative — 20, VFX — 20, Concept Art — 40, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц. Старое имя команды `Design` принимается как совместимый alias и отображается как `Game Design`.
+Месячные мощности команд задаются на странице. Значения по умолчанию: Game Design — 20, Narrative — 20, VFX — 20, Concept Art — 40, Level Design — 80, Level Art — 40, 3D Outsource — 60, Technical Art — 20, Sound — 20 mdays/месяц.
 
-Загруженные estimates, dependencies и объединённый stage/team/capacity CSV сохраняются в browser local storage. Кнопка сброса очищает сохранённые версии и снова загружает внешние CSV-файлы из рабочей директории.
+Загруженные estimates, dependencies и объединённый stage/team/capacity CSV сохраняются в browser local storage и автоматически восстанавливаются при следующем открытии страницы.
 
-Если браузер блокирует автоматическое чтение соседних файлов при открытии через `file://`, страница всё равно запускается и ждёт ручной загрузки estimates CSV. Один estimates-файл достаточен для построения плана: отсутствующие настройки этапов временно получают `Unknown` и `Max Parallel People = 1`; stage/team/capacity CSV можно загрузить следом.
+Страница запускается без встроенного production-плана и ждёт загрузки estimates CSV, если ранее загруженный файл не найден в browser local storage. Один estimates-файл достаточен для построения плана: отсутствующие настройки этапов временно получают `Unknown` и `Max Parallel People = 1`; stage/team/capacity CSV можно загрузить следом.
 
 ## Тесты
 

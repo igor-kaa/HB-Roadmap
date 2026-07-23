@@ -9,8 +9,7 @@
   const DEPENDENCY_COLUMNS = ['From Stage', 'To Stage', 'Type', 'Lag Days'];
   const STAGE_TEAM_CAPACITY_COLUMNS = ['Stage', 'Team', 'Max Parallel People'];
   const DEPARTMENTS = Object.freeze([
-    // `Design` remains a legacy alias so previously saved stage catalogs keep loading.
-    { id: 'gameDesign', name: 'Game Design', aliases: ['Design'], css: 'loc-game-design', defaultCapacity: 20 },
+    { id: 'gameDesign', name: 'Game Design', css: 'loc-game-design', defaultCapacity: 20 },
     { id: 'narrative', name: 'Narrative', css: 'loc-narrative', defaultCapacity: 20 },
     { id: 'vfx', name: 'VFX', css: 'loc-vfx', defaultCapacity: 20 },
     { id: 'conceptArt', name: 'Concept Art', css: 'loc-concept-art', defaultCapacity: 40 },
@@ -91,8 +90,7 @@
     const normalized = String(team || '').trim().toLowerCase();
     return DEPARTMENTS.find(item =>
       item.id.toLowerCase() === normalized ||
-      item.name.toLowerCase() === normalized ||
-      (item.aliases || []).some(alias => alias.toLowerCase() === normalized)
+      item.name.toLowerCase() === normalized
     );
   }
 
@@ -214,9 +212,7 @@
         departmentCss: department.css,
         estimate,
         status: String(row[index('Status')] || '').trim(),
-        notes: String(row[index('Notes')] || '').trim(),
-        sourceStage,
-        isUnconfigured: !registered
+        notes: String(row[index('Notes')] || '').trim()
       });
     }
 
@@ -251,12 +247,7 @@
   }
 
   return {
-    REQUIRED_COLUMNS,
-    DEPENDENCY_COLUMNS,
-    STAGE_TEAM_CAPACITY_COLUMNS,
     DEPARTMENTS,
-    parseRows,
-    normalizeStageName,
     stageIdForName,
     parseStageTeamCapacities,
     mergeStageTeamCapacities,
